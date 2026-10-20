@@ -166,6 +166,6 @@ This template is intentionally simple so students can focus on the science inste
 - CI checks
 - docs pages
 
-## Disclaimer
+## Disclaimer **
 
 Risk Resource is intended for informational purposes only and is not a substitute for official warnings or evacuation orders.
