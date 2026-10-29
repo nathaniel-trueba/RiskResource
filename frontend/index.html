@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Risk Resource</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Risk Resource</h1>
+      <p>US natural disaster risk</p>
+    </div>
+
+    <div class="controls">
+      <div class="toggle" role="group" aria-label="Map level">
+        <button type="button" data-view="states" class="active">States</button>
+        <button type="button" data-view="counties">Counties</button>
+      </div>
+      <label class="select">
+        <span>Show</span>
+        <select id="metric"></select>
+      </label>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div id="map" aria-label="Map of US disaster risk"></div>
+
+    <aside id="panel" class="panel">
+      <div id="panel-body">
+        <p class="hint">Click a state or county to see its details.</p>
+      </div>
+      <footer class="source" id="source"></footer>
+    </aside>
+  </main>
+
+  <div id="loading" class="loading">Loading map…</div>
+
+  <!-- Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+
+  <!-- App -->
+  <script src="data/risk-data.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/map.js"></script>
+</body>
+</html>
