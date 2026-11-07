@@ -6,7 +6,7 @@ export default function Footer() {
     <footer className="w-full bg-[#11100e] border-t border-white/10 py-12 px-6">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8">
         {/* Brand Mission */}
-        <div className="md:col-span-6 pr-6">
+        <div className="md:col-span-4 pr-6">
           <h4 className="text-base font-bold text-white tracking-tight mb-2">Risk Resource</h4>
           <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
             Combines federal data from FEMA, NOAA, USGS and NIFC into an explainable risk index for homeowners and communities.
@@ -57,7 +57,28 @@ export default function Footer() {
           </h5>
           <ul className="space-y-2 text-xs text-gray-400">
             <li>DS3 at UCSD</li>
-            <li>HDSI</li>
+          </ul>
+        </div>
+
+        {/* Column 4: Team */}
+        <div className="md:col-span-2 space-y-3">
+          <h5 className="text-xs font-mono uppercase tracking-wider text-gray-200 font-semibold">
+            Team
+          </h5>
+          <ul className="space-y-2 text-xs">
+            {['Member 1', 'Member 2', 'Member 3', 'Member 4'].map((name) => (
+              <li key={name}>
+                {/* TODO: replace href with each member's LinkedIn URL */}
+                <a
+                  href="#"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  {name}
+                </a>
+              </li>
+            ))}
           </ul>
         </div>
       </div>
