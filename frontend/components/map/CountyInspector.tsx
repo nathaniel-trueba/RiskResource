@@ -2,97 +2,129 @@
 'use client';
 
 import React from 'react';
-import { CountyRecord } from '@/lib/types';
+import { FemaCountyRecord } from '@/lib/types';
+import { RATINGS, NO_DATA, money, fmtInt } from '@/lib/mockRiskData';
 
 interface Props {
-  county: CountyRecord;
-  onBackToState: () => void;
+  countyRecord: FemaCountyRecord | null;
+  fallbackName?: string;
+  source: string;
+  version: string;
 }
 
-export default function CountyInspector({ county, onBackToState }: Props) {
-  const getBadgeColor = (tier: string) => {
-    switch (tier) {
-      case 'Critical': return 'bg-[#7a221b] text-white';
-      case 'Elevated': return 'bg-[#ca6834] text-white';
-      case 'Moderate': return 'bg-[#e5ab58] text-gray-900';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
+export default function CountyInspector({ countyRecord, fallbackName, source, version }: Props) {
+  if (!countyRecord) {
+    return (
+      <aside className="w-full lg:w-[340px] bg-white border border-[#e2e0db] rounded-xl flex flex-col justify-between overflow-y-auto">
+        <div className="p-5">
+          {fallbackName ? (
+            <>
+              <h2 className="text-xl font-bold text-[#1d232b] m-0">{fallbackName}</h2>
+              <p className="text-xs text-[#5f6b78] mt-1 mb-4">No FEMA data matched this area.</p>
+              <p className="text-xs text-[#5f6b78]">
+                The boundary file uses older county lines in a few places (Connecticut&apos;s 2022 switch to planning
+                regions, for example), so those areas don&apos;t line up with FEMA&apos;s latest data yet.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-[#5f6b78]">Click a county to see its details.</p>
+          )}
+        </div>
+        <footer className="px-5 py-3 text-xs text-[#5f6b78] border-t border-[#e2e0db]">
+          Data:{' '}
+          <a href="https://hazards.fema.gov/nri/" target="_blank" rel="noopener noreferrer" className="underline">
+            {source}
+          </a>
+          , {version}
+        </footer>
+      </aside>
+    );
+  }
+
+  const rating = RATINGS.find((x) => x.label === countyRecord.risk_rating) || { color: NO_DATA };
+  const dark = ['Very High', 'Relatively High'].includes(countyRecord.risk_rating);
+  const maxEal = countyRecord.top_hazards?.[0]?.eal || 1;
 
   return (
-    <aside className="w-full lg:w-88 bg-white border border-gray-200/90 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
-      <div>
-        {/* Navigation breadcrumb */}
-        <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-          <button
-            onClick={onBackToState}
-            className="text-xs text-gray-500 hover:text-black flex items-center gap-1 font-mono cursor-pointer"
-          >
-            ← Back to {county.state}
-          </button>
-          <span className="text-[10px] font-mono text-gray-400">FIPS: {county.fips}</span>
+    <aside className="w-full lg:w-[340px] bg-white border border-[#e2e0db] rounded-xl flex flex-col justify-between overflow-y-auto">
+      <div className="p-5">
+        <h2 className="text-xl font-bold text-[#1d232b] m-0">{countyRecord.name}</h2>
+        <p className="text-xs text-[#5f6b78] mt-1 mb-3">
+          {countyRecord.state} · {fmtInt(countyRecord.population)} people
+        </p>
+
+        <span
+          className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold mb-4"
+          style={{
+            backgroundColor: rating.color,
+            color: dark ? '#ffffff' : '#1d232b',
+          }}
+        >
+          {countyRecord.risk_rating} risk
+        </span>
+
+        <div className="grid grid-cols-2 gap-2.5 mb-5">
+          <div className="p-2.5 border border-[#e2e0db] rounded-lg">
+            <div className="text-[11px] text-[#5f6b78] uppercase tracking-wider">Risk score</div>
+            <div className="text-base font-semibold mt-0.5 tabular-nums">
+              {countyRecord.risk_score == null ? '-' : countyRecord.risk_score.toFixed(1)}
+            </div>
+          </div>
+          <div className="p-2.5 border border-[#e2e0db] rounded-lg">
+            <div className="text-[11px] text-[#5f6b78] uppercase tracking-wider">Loss per person / yr</div>
+            <div className="text-base font-semibold mt-0.5 tabular-nums">{money(countyRecord.eal_per_person)}</div>
+          </div>
+          <div className="p-2.5 border border-[#e2e0db] rounded-lg">
+            <div className="text-[11px] text-[#5f6b78] uppercase tracking-wider">Social vulnerability</div>
+            <div className="text-base font-semibold mt-0.5 tabular-nums">
+              {countyRecord.sovi_score == null ? '-' : countyRecord.sovi_score.toFixed(1)}
+            </div>
+          </div>
+          <div className="p-2.5 border border-[#e2e0db] rounded-lg">
+            <div className="text-[11px] text-[#5f6b78] uppercase tracking-wider">Community resilience</div>
+            <div className="text-base font-semibold mt-0.5 tabular-nums">
+              {countyRecord.resl_score == null ? '-' : countyRecord.resl_score.toFixed(1)}
+            </div>
+          </div>
         </div>
 
-        {/* Header */}
-        <div className="mt-4 flex items-start justify-between">
-          <div>
-            <h2 className="text-xl font-black text-gray-950 tracking-tight">{county.name}</h2>
-            <p className="text-xs text-gray-500 font-mono mt-0.5">Pop: {county.pop}</p>
-          </div>
-          <div className="text-right">
-            <span className="text-2xl font-black font-mono text-gray-900 block leading-none">
-              {county.compositeScore}
-              <span className="text-xs font-normal text-gray-400">/100</span>
-            </span>
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block mt-1 ${getBadgeColor(county.tier)}`}>
-              {county.tier}
-            </span>
-          </div>
-        </div>
-
-        {/* Live Warning Banner */}
-        <div className="mt-4 p-3 bg-amber-50 border border-amber-200/80 rounded-xl">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
-            <span className="inline-block w-2 h-2 rounded-full bg-amber-600 animate-pulse" />
-            Live Threat Advisory
-          </div>
-          <p className="text-[11px] text-amber-800 mt-1 leading-snug">{county.activeAlert}</p>
-        </div>
-
-        {/* Sub-Hazard Scoring Breakdown */}
-        <div className="mt-6">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 block mb-3 font-semibold">
-            Hazard Scores & Active Conditions
-          </span>
-
-          <div className="space-y-3.5">
-            {county.hazards.map((h) => (
-              <div key={h.name} className="text-xs">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-semibold text-gray-900">{h.name}</span>
-                  <span className="font-mono font-bold text-gray-800">{h.score}/100</span>
+        <h3 className="text-xs uppercase tracking-wider text-[#5f6b78] font-semibold mb-2.5">
+          Biggest hazards (expected annual loss)
+        </h3>
+        {countyRecord.top_hazards && countyRecord.top_hazards.length > 0 ? (
+          <ul className="list-none m-0 p-0 space-y-2.5">
+            {countyRecord.top_hazards.map((h) => (
+              <li key={h.hazard} className="text-xs">
+                <div className="flex justify-between mb-1">
+                  <span>{h.hazard}</span>
+                  <span>{money(h.eal)}/yr</span>
                 </div>
-                <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${h.score}%`,
-                      backgroundColor:
-                        h.score >= 75 ? '#7a221b' : h.score >= 50 ? '#ca6834' : '#e5ab58',
-                    }}
+                <div className="h-1.5 bg-[#f6f5f2] rounded-xs overflow-hidden">
+                  <span
+                    className="block h-full bg-[#b8321f]"
+                    style={{ width: `${((100 * h.eal) / maxEal).toFixed(0)}%` }}
                   />
                 </div>
-                <p className="text-[10px] text-gray-500 font-mono mt-1 leading-tight">{h.warning}</p>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        ) : (
+          <p className="text-xs text-[#5f6b78]">No hazard losses reported.</p>
+        )}
+
+        <p className="text-xs text-[#5f6b78] mt-4">
+          Scores are national percentiles from 0 to 100. Higher risk and vulnerability are worse; higher resilience is
+          better.
+        </p>
       </div>
 
-      <div className="pt-4 border-t border-gray-100 text-[10px] text-gray-400 font-mono flex items-center justify-between">
-        <span>Synced with NWS & USGS feeds</span>
-        <span className="text-emerald-600 font-semibold">● Active</span>
-      </div>
+      <footer className="px-5 py-3 text-xs text-[#5f6b78] border-t border-[#e2e0db]">
+        Data:{' '}
+        <a href="https://hazards.fema.gov/nri/" target="_blank" rel="noopener noreferrer" className="underline">
+          {source}
+        </a>
+        , {version}
+      </footer>
     </aside>
   );
 }
