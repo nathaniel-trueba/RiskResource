@@ -30,7 +30,7 @@ export default function HomePage() {
 
             {/* Search capsule */}
             <div className="mt-8 flex items-center bg-[#1d1914] border border-white/10 rounded-2xl p-1.5 max-w-lg focus-within:border-[#e29b4d]/60 transition-colors shadow-lg">
-              <span className="pl-3.5 pr-2 text-gray-500 text-base">🔍</span>
+              <span className="pl-3.5 pr-2 text-gray-500 text-base"></span>
               <input
                 type="text"
                 placeholder="Search a county or state"
