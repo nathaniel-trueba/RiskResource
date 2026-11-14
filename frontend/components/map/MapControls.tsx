@@ -1,98 +1,73 @@
+// frontend/components/map/MapControls.tsx
 'use client';
 
 import React from 'react';
+import { MapViewMode, MetricOption } from '@/lib/types';
 
 interface Props {
-  viewMode: 'states' | 'counties';
-  onViewModeChange: (mode: 'states' | 'counties') => void;
-  selectedMetric: string;
-  onMetricChange: (metric: string) => void;
-  selectedHazard: string;
-  onHazardChange: (hazard: string) => void;
+  viewMode: MapViewMode;
+  onViewModeChange: (mode: MapViewMode) => void;
+  metrics: MetricOption[];
+  selectedMetricIndex: number;
+  onMetricChange: (index: number) => void;
 }
 
 export default function MapControls({
   viewMode,
   onViewModeChange,
-  selectedMetric,
+  metrics,
+  selectedMetricIndex,
   onMetricChange,
-  selectedHazard,
-  onHazardChange,
 }: Props) {
-  const hazards = ['All hazards', 'Earthquake', 'Flood', 'Wildfire', 'Hurricane', 'Tornado'];
-
   return (
-    <div className="w-full space-y-4 mb-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="inline-flex p-1 bg-gray-200/80 rounded-full border border-gray-300/70">
-            <button
-              onClick={() => onViewModeChange('states')}
-              className={`px-4 py-1 rounded-full text-xs font-semibold transition-all ${
-                viewMode === 'states'
-                  ? 'bg-[#1b232c] text-white shadow-xs'
-                  : 'text-gray-700 hover:text-black'
-              }`}
-            >
-              States
-            </button>
-            <button
-              onClick={() => onViewModeChange('counties')}
-              className={`px-4 py-1 rounded-full text-xs font-semibold transition-all ${
-                viewMode === 'counties'
-                  ? 'bg-[#1b232c] text-white shadow-xs'
-                  : 'text-gray-700 hover:text-black'
-              }`}
-            >
-              Counties
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 font-medium">Show</span>
-            <select
-              value={selectedMetric}
-              onChange={(e) => onMetricChange(e.target.value)}
-              className="px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg shadow-2xs font-medium text-gray-800 focus:outline-none"
-            >
-              <option value="highRiskPct">% of people in high-risk counties</option>
-              <option value="lossPerPerson">Expected annual loss per person</option>
-              <option value="totalLoss">Total expected annual loss</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="Search a county or ZIP"
-            disabled
-            className="px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg w-52 text-gray-400 cursor-not-allowed"
-          />
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-            Planned
-          </span>
-        </div>
+    <div className="flex flex-wrap items-center justify-between gap-4 py-3 px-5 bg-white border border-[#e2e0db] rounded-xl shadow-2xs mb-4">
+      <div className="flex items-center gap-3">
+        <h1 className="text-lg font-bold tracking-tight text-[#1d232b] m-0">Risk Resource</h1>
+        <span className="text-xs text-[#5f6b78]">US natural disaster risk</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200/60 text-xs">
-        <span className="text-gray-400 font-mono text-[11px] mr-1">Hazard:</span>
-        {hazards.map((hazard) => (
+      <div className="flex flex-wrap items-center gap-3.5">
+        {/* States / Counties Toggle */}
+        <div
+          role="group"
+          aria-label="Map level"
+          className="inline-flex border border-[#e2e0db] rounded-full p-0.5 bg-[#f6f5f2]"
+        >
           <button
-            key={hazard}
-            onClick={() => onHazardChange(hazard)}
-            className={`px-3 py-1 rounded-full font-medium transition-colors ${
-              selectedHazard === hazard
-                ? 'bg-[#1b232c] text-white'
-                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+            type="button"
+            onClick={() => onViewModeChange('states')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+              viewMode === 'states' ? 'bg-[#1d232b] text-white' : 'text-[#5f6b78] hover:text-[#1d232b]'
             }`}
           >
-            {hazard}
+            States
           </button>
-        ))}
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-          Planned
-        </span>
+          <button
+            type="button"
+            onClick={() => onViewModeChange('counties')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+              viewMode === 'counties' ? 'bg-[#1d232b] text-white' : 'text-[#5f6b78] hover:text-[#1d232b]'
+            }`}
+          >
+            Counties
+          </button>
+        </div>
+
+        {/* Show Metric Dropdown */}
+        <label className="flex items-center gap-2 text-xs text-[#5f6b78]">
+          <span>Show</span>
+          <select
+            value={selectedMetricIndex}
+            onChange={(e) => onMetricChange(Number(e.target.value))}
+            className="text-xs text-[#1d232b] px-2.5 py-1.5 border border-[#e2e0db] rounded-lg bg-white focus:outline-none"
+          >
+            {metrics.map((m, i) => (
+              <option key={m.key} value={i}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
     </div>
   );
