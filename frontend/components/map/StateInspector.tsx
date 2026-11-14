@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { StateRecord } from '@/lib/types';
+import ExpectedLossSection from '@/components/map/ExpectedLossSection';
 
 interface Props {
   stateData: StateRecord;
@@ -36,13 +37,15 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
           <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
             <span className="text-[10px] text-gray-500 block">Active Alerts</span>
             <span className="text-base font-bold text-gray-900 font-mono mt-0.5 block">
-              {stateData.activeAlertCount} Warnings
+              {stateData.activeAlertCount === undefined
+                ? 'Unavailable'
+                : `${stateData.activeAlertCount} Warnings`}
             </span>
           </div>
           <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
             <span className="text-[10px] text-gray-500 block">Threat Index</span>
             <span className="text-base font-bold text-[#7a221b] font-mono mt-0.5 block">
-              High (Live)
+              {stateData.tier} (Live)
             </span>
           </div>
         </div>
@@ -53,7 +56,7 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
             Current Statewide Focus
           </span>
           <p className="text-xs text-red-950 font-medium mt-0.5 leading-snug">
-            {stateData.primaryAlert}
+            {stateData.primaryAlert ?? 'No active alerts'}
           </p>
         </div>
 
@@ -85,6 +88,8 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
             ))}
           </div>
         </div>
+
+        <ExpectedLossSection loss={stateData.expectedLoss} kind="state" stateCode={stateData.code} />
       </div>
 
       <button

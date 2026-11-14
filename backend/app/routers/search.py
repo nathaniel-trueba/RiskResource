@@ -20,4 +20,14 @@ async def search(
     service: Annotated[SearchService, Depends(get_search_service)],
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> list[SearchResult]:
+    """Find counties by county name, city or ZIP code.
+    \f
+    Args:
+        q: Search text, optionally with a trailing state, e.g. "Fresno, CA".
+        service: Injected SearchService.
+        limit: Maximum number of results.
+    Returns:
+        Matching counties, best matches first.
+    Called by: HTTP GET /api/search.
+    """
     return await service.search(q, limit)

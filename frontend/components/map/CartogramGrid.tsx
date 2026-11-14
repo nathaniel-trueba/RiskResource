@@ -20,9 +20,7 @@ export default function CartogramGrid({
   onSelectState,
   getColor,
 }: Props) {
-  // Helper to determine badge color if county.color is absent
   const getTierColor = (county: CountyRecord) => {
-    if (county.color) return county.color;
     switch (county.tier) {
       case 'Critical': return '#7a221b';
       case 'Elevated': return '#ca6834';
@@ -44,8 +42,7 @@ export default function CartogramGrid({
         <div className="grid grid-cols-12 gap-2 h-full w-full max-w-4xl mx-auto items-center">
           {states.map((st) => {
             const isSelected = selectedState.code === st.code;
-            // Evaluates compositeScore (0-100) or falls back to legacy lossPerPerson
-            const metricValue = st.compositeScore ?? st.lossPerPerson ?? 50;
+            const metricValue = st.compositeScore;
 
             return (
               <button
@@ -85,13 +82,13 @@ export default function CartogramGrid({
                 </div>
                 <div className="text-right">
                   <span className="font-mono font-semibold text-gray-900 block">
-                    {county.compositeScore ? `${county.compositeScore}/100` : county.lossPerPerson || 'N/A'}
+                    {`${county.compositeScore}/100`}
                   </span>
                   <span
                     className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold text-white inline-block mt-0.5"
                     style={{ backgroundColor: getTierColor(county) }}
                   >
-                    {county.tier || county.risk || 'Moderate'}
+                    {county.tier}
                   </span>
                 </div>
               </div>

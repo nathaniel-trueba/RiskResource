@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { CountyRecord } from '@/lib/types';
+import ExpectedLossSection from '@/components/map/ExpectedLossSection';
 
 interface Props {
   county: CountyRecord;
@@ -56,7 +57,7 @@ export default function CountyInspector({ county, onBackToState }: Props) {
             <span className="inline-block w-2 h-2 rounded-full bg-amber-600 animate-pulse" />
             Live Threat Advisory
           </div>
-          <p className="text-[11px] text-amber-800 mt-1 leading-snug">{county.activeAlert}</p>
+          <p className="text-[11px] text-amber-800 mt-1 leading-snug">{county.activeAlert ?? 'No active alerts'}</p>
         </div>
 
         {/* Sub-Hazard Scoring Breakdown */}
@@ -87,10 +88,12 @@ export default function CountyInspector({ county, onBackToState }: Props) {
             ))}
           </div>
         </div>
+
+        <ExpectedLossSection loss={county.expectedLoss} kind="county" stateCode={county.stateCode} />
       </div>
 
       <div className="pt-4 border-t border-gray-100 text-[10px] text-gray-400 font-mono flex items-center justify-between">
-        <span>Synced with NWS & USGS feeds</span>
+        <span>Scores: NWS & USGS live feeds · Losses: FEMA NRI</span>
         <span className="text-emerald-600 font-semibold">● Active</span>
       </div>
     </aside>

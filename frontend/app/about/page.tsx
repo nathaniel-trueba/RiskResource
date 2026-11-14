@@ -3,7 +3,7 @@
 import React from 'react';
 import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
-import Link from 'next/link';
+import { NRI_HAZARDS_EXCLUDED, NRI_HAZARDS_INCLUDED } from '@/lib/nri';
 
 interface DataSource {
   name: string;
@@ -20,11 +20,21 @@ const DATA_SOURCES: DataSource[] = [
     name: 'National Risk Index (NRI)',
     agency: 'FEMA',
     type: 'Baseline (Static)',
-    cadence: 'Annual / Biennial',
-    resolution: 'Census Tract & County',
+    cadence: 'Periodic releases (December 2025 in use)',
+    resolution: 'County (Connecticut by planning region)',
     description:
-      'Provides 20-year historical baseline risk ratings, expected annual financial loss per person, social vulnerability indices, and community resilience scores across 18 natural hazards.',
+      "Modeled expected annual loss in dollars, plus social vulnerability and community resilience ratings. We use its losses for the 11 of its 18 hazards that match ours, for the map's loss measures and the Expected Annual Loss panels. It isn't part of the risk score.",
     link: 'https://hazards.fema.gov/nri/',
+  },
+  {
+    name: 'Disaster Declarations Summaries',
+    agency: 'OpenFEMA',
+    type: 'Baseline (Static)',
+    cadence: 'Refreshed when we rebuild the baseline',
+    resolution: 'County',
+    description:
+      'Every federal disaster declaration since 2006, by county and incident type. Counting distinct declarations per hazard gives the historical half of each risk score.',
+    link: 'https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2',
   },
   {
     name: 'Real-Time Seismic Network',
@@ -99,7 +109,7 @@ export default function AboutDataPage() {
               </span>
               <h3 className="text-sm font-bold text-gray-900 mt-3">Long-Term Exposure</h3>
               <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-                Derived from FEMA NRI 20-year historical incidence, fault line proximity, elevation slope, and designated 100-year flood zone buffers.
+                A county&apos;s percentile rank, among counties that have had the hazard, by distinct FEMA disaster declarations since 2006. For earthquakes it uses USGS M4.5+ earthquakes within 60 miles instead.
               </p>
             </div>
 
@@ -113,6 +123,56 @@ export default function AboutDataPage() {
               </p>
             </div>
           </div>
+        </section>
+
+        {/* Expected annual loss */}
+        <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80">
+          <div className="mb-6">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-gray-400 block mb-1">
+              Losses
+            </span>
+            <h2 className="text-xl font-medium text-gray-900">Expected annual loss</h2>
+            <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">
+              Dollar figures come straight from FEMA&apos;s National Risk Index (December 2025). They
+              are FEMA&apos;s modeled average yearly loss to buildings and crops, plus deaths and
+              injuries at FEMA&apos;s dollar value. They&apos;re estimates, not money actually lost, and
+              they don&apos;t change with live conditions. A county is <em>high-loss</em> when its loss
+              per person is in the top 20% of all US counties.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto bg-white border border-gray-200 rounded-xl shadow-2xs">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50 font-mono text-gray-500 text-[11px]">
+                  <th className="p-3.5">Our hazard</th>
+                  <th className="p-3.5">NRI hazards counted</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-gray-700">
+                {Object.entries(NRI_HAZARDS_INCLUDED).map(([ours, nri]) => (
+                  <tr key={ours}>
+                    <td className="p-3.5 font-bold text-gray-900">{ours}</td>
+                    <td className="p-3.5">{nri}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td className="p-3.5 font-bold text-gray-500">Not counted</td>
+                  <td className="p-3.5 text-gray-500">
+                    {NRI_HAZARDS_EXCLUDED.join(', ')}: NRI models these, but they have no
+                    matching hazard here, so every loss figure leaves them out. Nationally, the
+                    counted hazards make up about 86% of NRI&apos;s total expected loss.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-gray-500 mt-3 leading-relaxed max-w-2xl">
+            NRI reports Connecticut by its 9 planning regions, which don&apos;t line up with its
+            8 former counties, so Connecticut counties have no loss data; the state total includes
+            every region. Social vulnerability and community resilience ratings cover all of
+            NRI&apos;s hazards.
+          </p>
         </section>
 
         {/* Agency Ingestion Feeds */}

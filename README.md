@@ -74,6 +74,27 @@ RiskResource/
 └── README.md
 ```
 
+## Backend Setup
+
+See [backend/README.md](backend/README.md) for the backend's architecture and details.
+
+The API reads its reference data (states, counties, baseline hazard scores) from a
+Supabase Postgres database. Only the backend talks to Supabase.
+
+1. Copy `backend/env.example` to `backend/.env` and set `DATABASE_URL` to the
+   Supabase **session pooler** connection string, with the real database password.
+2. Install dependencies: `pip install -r backend/requirements.txt`
+3. Start the API (from `backend/`): `uvicorn app.main:app --reload`
+
+On startup the API creates any missing tables from `backend/db/schema.sql` and,
+if the reference data is empty, seeds it from the committed `data/reference.json`
+snapshot. Both happen only once; later startups just read the data.
+
+To replace data that's already seeded (from `backend/`):
+- `python -m scripts.init_db --reseed` reloads it from `data/reference.json`
+- `python -m scripts.init_db --refresh` rebuilds it from FEMA, USGS and Census
+  (about a minute), updates `data/reference.json`, then reseeds
+
 ## Git and GitHub Workflow for DS3 Projects
 
 Using Git and GitHub well is just as important as writing good code. A clean workflow makes collaboration easier and helps the project stay organized.

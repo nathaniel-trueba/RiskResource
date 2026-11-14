@@ -4,3 +4,13 @@ next-env.d.ts
 .env*.local
 .vercel
 npm-debug.log*
+
+# Secrets
+.env
+**/.env
+
+# Cached Information
+__pycache__/
+# Python bytecode
+__pycache__/
+*.pyc

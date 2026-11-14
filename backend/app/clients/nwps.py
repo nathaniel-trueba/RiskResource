@@ -18,13 +18,28 @@ class Gauge:
 
 class NwpsClient:
     def __init__(self, http: httpx.AsyncClient) -> None:
+        """Wrap the shared HTTP client.
+
+        Args:
+            http: The app-wide httpx client, which sets the User-Agent and timeout.
+        Called by: main.lifespan at startup.
+        """
         self._http = http
         self._rate_limited_until = 0.0
 
     async def fetch_gauges(self, bbox: tuple[float, float, float, float]) -> list[Gauge]:
-        """Return gauges in a (west, south, east, north) box.
+        """Return the river gauges inside a bounding box, with their flood categories.
 
-        Always use a box: fetching every gauge takes about 44 seconds and 13 MB.
+        Always use a box: fetching every gauge takes about 44 seconds and 13 MB. After an
+        HTTP 429, every call fails fast for RATE_LIMIT_BACKOFF_SECONDS.
+
+        Args:
+            bbox: (west, south, east, north) in degrees, usually a county's bbox.
+        Returns:
+            One Gauge per gauge in the box (possibly empty).
+        Raises:
+            httpx.HTTPError: On a failed request, or while backing off from a rate limit.
+        Called by: RiskService._gauges_for, through the TTL cache.
         """
         if time.monotonic() < self._rate_limited_until:
             raise httpx.HTTPError("NWPS rate limit: backing off")
@@ -49,6 +64,14 @@ class NwpsClient:
 
 
 def _parse_gauge(gauge: dict) -> Gauge:
+    """Convert one raw NWPS gauge object into a Gauge.
+
+    Args:
+        gauge: One item of the response's "gauges" list.
+    Returns:
+        The Gauge, with empty strings for missing flood categories.
+    Called by: NwpsClient.fetch_gauges.
+    """
     status = gauge.get("status") or {}
     return Gauge(
         name=gauge.get("name") or gauge["lid"],

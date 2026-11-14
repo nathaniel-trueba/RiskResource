@@ -20,7 +20,14 @@ _COUNTY_SUFFIX = re.compile(
 
 
 def normalize(text: str) -> str:
-    """Lowercase, remove accents and periods, and drop any county-type suffix."""
+    """Lowercase, remove accents and periods, and drop any county-type suffix.
+
+    Args:
+        text: A query, county name or state name.
+    Returns:
+        The normalized text, e.g. "Doña Ana County" gives "dona ana".
+    Called by: general utility for every name comparison in this module.
+    """
     decomposed = unicodedata.normalize("NFKD", text)
     ascii_text = "".join(c for c in decomposed if not unicodedata.combining(c))
     cleaned = " ".join(ascii_text.lower().replace(".", "").split())
@@ -28,6 +35,14 @@ def normalize(text: str) -> str:
 
 
 def _largest_first(county: County) -> int:
+    """Sort key that orders counties by population, largest first.
+
+    Args:
+        county: The county.
+    Returns:
+        Its negated population (0 if unknown).
+    Called by: SearchService._match_counties.
+    """
     return -(county.population or 0)
 
 
@@ -39,6 +54,15 @@ class SearchService:
         reference: ReferenceData,
         open_meteo: OpenMeteoClient,
     ) -> None:
+        """Store dependencies and build the state and county lookup tables.
+
+        Args:
+            settings: App settings, for the geocode cache lifetime.
+            cache: The shared TTL cache.
+            reference: Static county and state data.
+            open_meteo: Client for the place geocoder.
+        Called by: main.lifespan at startup.
+        """
         self._settings = settings
         self._cache = cache
         self._reference = reference
@@ -53,6 +77,18 @@ class SearchService:
         }
 
     async def search(self, query: str, limit: int) -> list[SearchResult]:
+        """Resolve free text to counties.
+
+        County names are matched locally first. If none match, the text is geocoded as
+        a city or ZIP code.
+
+        Args:
+            query: Search text, optionally with a trailing state, e.g. "Fresno, CA".
+            limit: Maximum number of results.
+        Returns:
+            Matching counties, best matches first. Empty if nothing matched.
+        Called by: routers/search.search.
+        """
         place, state_code = self._split_state(query)
         if not place:
             return []
@@ -62,11 +98,27 @@ class SearchService:
         return (await self._match_places(place, state_code))[:limit]
 
     def _split_state(self, query: str) -> tuple[str, str | None]:
-        """Separate an optional trailing state: "Fresno, CA" gives ("Fresno", "CA")."""
+        """Separate an optional trailing state: "Fresno, CA" gives ("Fresno", "CA").
+
+        Args:
+            query: The raw search text.
+        Returns:
+            The place text, and the state code, or None if no state was recognized.
+        Called by: search.
+        """
         place, _, state_text = query.partition(",")
         return place.strip(), self._state_codes.get(normalize(state_text))
 
     def _match_counties(self, place: str, state_code: str | None) -> list[County]:
+        """Find counties whose name matches the place text.
+
+        Args:
+            place: Place text without the state.
+            state_code: Limit matches to this state, if given.
+        Returns:
+            Exact name matches, then prefix matches, each largest population first.
+        Called by: search.
+        """
         target = normalize(place)
         exact: list[County] = []
         prefix: list[County] = []
@@ -81,6 +133,16 @@ class SearchService:
         return sorted(exact, key=_largest_first) + sorted(prefix, key=_largest_first)
 
     async def _match_places(self, place: str, state_code: str | None) -> list[SearchResult]:
+        """Geocode the place text and map the places found to their counties.
+
+        Args:
+            place: Place text without the state.
+            state_code: Limit matches to this state, if given.
+        Returns:
+            One result per county, noting the place that matched. Empty if the
+            geocoder is unavailable.
+        Called by: search.
+        """
         try:
             places = await self._cache.get_or_fetch(
                 f"{GEOCODE_PREFIX}{place.lower()}",
@@ -102,6 +164,15 @@ class SearchService:
         return list(results.values())
 
     def _result(self, county: County, matched_place: str | None = None) -> SearchResult:
+        """Build the API result for a county.
+
+        Args:
+            county: The matched county.
+            matched_place: The city or ZIP that led to it, if any.
+        Returns:
+            The SearchResult.
+        Called by: search, _match_places.
+        """
         return SearchResult(
             fips=county.fips,
             name=county.name,

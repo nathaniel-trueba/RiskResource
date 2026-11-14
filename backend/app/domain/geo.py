@@ -11,6 +11,14 @@ def distance_to_boxes_miles(boxes: np.ndarray, latitude: float, longitude: float
     Distance is 0 inside a box. We measure to boxes rather than county centroids
     because a centroid can be far from most of a county. Riverside County's sits
     in the desert about 100 miles east of the city of Riverside.
+
+    Args:
+        boxes: Array of shape (n, 4), one bounding box per row, in degrees.
+        latitude: Point latitude.
+        longitude: Point longitude.
+    Returns:
+        Array of shape (n,) with great-circle distances in miles.
+    Called by: snapshot._apply_quakes, scripts/build_reference_data.load_quake_counts.
     """
     nearest_lon = np.radians(np.clip(longitude, boxes[:, 0], boxes[:, 2]))
     nearest_lat = np.radians(np.clip(latitude, boxes[:, 1], boxes[:, 3]))
