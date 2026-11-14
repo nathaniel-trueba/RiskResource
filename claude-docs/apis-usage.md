@@ -4,7 +4,9 @@ Audience: developers and coding agents working on the backend.
 
 This doc lists exactly what the backend calls and what it does with the results. For how the pieces fit together, see [`backend-doc.md`](backend-doc.md). For the list of APIs the team chose, see [`apis.md`](apis.md).
 
-Snapshot: 2026-11-07. Limits are as documented or observed on that date.
+Snapshot: 2026-11-14, at commit `221a0c8` on `add-backend-connect-supabase`. Limits are as documented or observed then.
+
+The backend also uses a Supabase Postgres database. That's our own storage, not an external data API, so it's covered in [`backend-doc.md`](backend-doc.md#8-database) instead.
 
 ## Summary
 
@@ -19,10 +21,13 @@ Snapshot: 2026-11-07. Limits are as documented or observed on that date.
 | [USGS history](#usgs-earthquake-history) | Build script | Manual | US, since 2006 | 1 call per build | Earthquake baseline |
 | [Census population](#census-population-estimates) | Build script | Manual | All counties | 2 files per build | Population |
 | [County GeoJSON](#county-boundaries) | Build script | Manual | All counties | 1 file per build | County list, locations |
+| [FEMA National Risk Index](#fema-national-risk-index) | Build script | Manual | All NRI counties | 2 calls per build | Expected annual loss, vulnerability and resilience ratings |
 
 **None of them need an API key.** Every request sends the header `User-Agent: UCSD-Risk-Resource-NotForProfit`, set by `USER_AGENT` in [`app/config.py`](../backend/app/config.py). NWS rejects requests without a `User-Agent` (tested: 403).
 
-The last three rows and geocoding are **not in `apis.md`**. They were added because none of the listed APIs provide population, county names or a way to resolve cities and ZIP codes.
+Census, county GeoJSON and geocoding were added because none of the listed APIs provide population, county names or a way to resolve cities and ZIP codes. The NRI was added to supply the expected-loss figures. All four are now listed in [`apis.md`](apis.md).
+
+"Build script" means [`scripts/build_reference_data.py`](../backend/scripts/build_reference_data.py), run by `python -m scripts.init_db --refresh`. Its output is saved to `data/reference.json` and seeded into the database.
 
 ## Why some APIs are only used per county
 
@@ -179,7 +184,7 @@ Results without `admin1` or `admin2` are skipped.
 
 ## Build-time sources
 
-Only [`scripts/build_reference_data.py`](../backend/scripts/build_reference_data.py) uses these, and the output is committed. **A running API never calls them**, so they can't affect a demo.
+Only [`scripts/build_reference_data.py`](../backend/scripts/build_reference_data.py) uses these, through `python -m scripts.init_db --refresh`. The output is committed as `data/reference.json` and seeded into Supabase. **A running API never calls them**, so they can't affect a demo. A full refresh took about 20 seconds at this snapshot.
 
 ### OpenFEMA disaster declarations
 
@@ -246,6 +251,38 @@ This is the same file the frontend draws, so IDs always match.
 | `geometry` | Centroid and bounding box |
 
 It's an older file, so two retired codes are mapped to their current ones in `FIPS_RENAMES`.
+
+### FEMA National Risk Index
+
+FEMA's official [National Risk Index Counties](https://www.arcgis.com/home/item.html?id=39485e8035d446a5bff03259508ae355) ArcGIS feature service, owned by `FEMA_NationalRiskIndex`. OpenFEMA's own API doesn't serve the NRI: its data set list marks it "Files Only". So this feature service is the closest thing to an NRI API.
+
+```
+GET https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/National_Risk_Index_Counties/FeatureServer/0/query
+    ?where=1=1&returnGeometry=false&orderByFields=OBJECTID&f=json
+    &resultOffset={rows so far}&resultRecordCount=2000
+    &outFields=STCOFIPS,STATEABBRV,POPULATION,NRI_VER,SOVI_RATNG,RESL_RATNG,
+               WFIR_EALT,ERQK_EALT,IFLD_EALT,CFLD_EALT,SWND_EALT,HAIL_EALT,
+               LTNG_EALT,ISTM_EALT,WNTW_EALT,HRCN_EALT,TRND_EALT
+```
+
+Pages are fetched until the response no longer has `exceededTransferLimit`. There were 3,232 rows in 2 calls, all `NRI_VER` "December 2025". The layer has 467 fields; only these are read:
+
+| Field | Used for |
+|---|---|
+| `STCOFIPS` | The county. Mapped onto our older codes by `NRI_TO_OUR_FIPS` |
+| `STATEABBRV` | State totals. Rows outside our 52 states and territories are dropped |
+| `POPULATION` | Loss per person, and high-loss population |
+| `NRI_VER` | `source` text, e.g. "FEMA National Risk Index, December 2025" |
+| `SOVI_RATNG`, `RESL_RATNG` | Social vulnerability and community resilience. "Data Unavailable" becomes `null` |
+| `<CODE>_EALT` for 11 hazards | Expected annual loss, dollars per year. Summed into our hazards by `NRI_HAZARDS` |
+
+**`_EALT` is a total:** building loss + population loss (deaths and injuries at FEMA's dollar value) + agriculture loss. We checked that `EAL_VALT` equals the sum of all 18 hazards' `_EALT`, and that each `_EALT` equals its three parts. A null `_EALT` means the hazard doesn't apply there, and counts as $0. The 7 hazards with no match here (`AVLN`, `CWAV`, `DRGT`, `HWAV`, `LNDS`, `TSUN`, `VLCN`) aren't requested.
+
+**Watch out for county codes.** NRI uses current codes, including Connecticut's 9 planning regions (`09110` to `09190`) and Alaska's 2019 split of Valdez-Cordova. Our boundary file has the older codes. [`backend-doc.md`](backend-doc.md#county-codes) explains how each case is handled.
+
+**Limits:** 2,000 records per query, the layer's `maxRecordCount`. No rate limit is stated. ArcGIS reports query errors as HTTP 200 with an `error` object, which the script checks for.
+
+**FEMA's other hosts didn't work.** The NRI services on `hazards.geoplatform.gov` didn't respond during testing.
 
 ## Adding or changing an API call
 
