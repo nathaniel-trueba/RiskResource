@@ -10,8 +10,9 @@
 }
 
 :root {
-  --background: #1a1612;
-  --foreground: #ededed;
+	color-scheme: light;
+  --background: #fcfbf7;
+  --foreground: #111827;
 }
 
 html,

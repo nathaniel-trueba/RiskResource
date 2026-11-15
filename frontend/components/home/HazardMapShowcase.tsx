@@ -14,7 +14,7 @@ interface HazardInfo {
 const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
   Flood: {
     name: 'Flood',
-    color: '#4a72b2',
+    color: '#2F7FD8',
     description:
       'Riverine and flash flooding follow the Gulf Coast, Florida and the Mississippi and Ohio river valleys.',
     activeStates: {
@@ -26,20 +26,20 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
       Missouri: '#eab676',
       Kentucky: '#eab676',
       Tennessee: '#eab676',
-      Texas: '#f1d69d',
-      Oklahoma: '#f1d69d',
-      Iowa: '#f1d69d',
-      Indiana: '#f1d69d',
-      Ohio: '#f1d69d',
-      Georgia: '#f1d69d',
-      Alabama: '#f1d69d',
-      'North Carolina': '#f1d69d',
-      'South Carolina': '#f1d69d',
+      Texas: '#efc974',
+      Oklahoma: '#efc974',
+      Iowa: '#efc974',
+      Indiana: '#efc974',
+      Ohio: '#efc974',
+      Georgia: '#efc974',
+      Alabama: '#efc974',
+      'North Carolina': '#efc974',
+      'South Carolina': '#efc974',
     },
   },
   Wildfire: {
     name: 'Wildfire',
-    color: '#e65100',
+    color: '#E8590C',
     description:
       'High fuel loads, drought, and seasonal Santa Ana or Diablo wind corridors elevate risk across the West.',
     activeStates: {
@@ -51,15 +51,15 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
       Arizona: '#eab676',
       'New Mexico': '#eab676',
       Utah: '#eab676',
-      Colorado: '#f1d69d',
-      Montana: '#f1d69d',
-      Wyoming: '#f1d69d',
+      Colorado: '#efc974',
+      Montana: '#efc974',
+      Wyoming: '#efc974',
       Hawaii: '#e08f52',
     },
   },
   Earthquake: {
     name: 'Earthquake',
-    color: '#c49a45',
+    color: '#A9742A',
     description:
       'Fault systems along the Pacific plate boundary, Cascadia Subduction Zone, and New Madrid Seismic Zone carry high risk.',
     activeStates: {
@@ -70,32 +70,32 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
       Nevada: '#eab676',
       Utah: '#eab676',
       Hawaii: '#eab676',
-      Missouri: '#f1d69d',
-      Tennessee: '#f1d69d',
+      Missouri: '#efc974',
+      Tennessee: '#efc974',
     },
   },
   Hurricane: {
     name: 'Hurricane',
-    color: '#2a9d8f',
+    color: '#0F8F8A',
     description:
       'Coastal counties from Texas to the Carolinas carry most of the risk, with Florida highest.',
     activeStates: {
       Florida: '#8f2d20',
       Louisiana: '#c45138',
       'South Carolina': '#e08f52',
-      Texas: '#f0c67a',
-      Mississippi: '#f0c67a',
-      Georgia: '#f0c67a',
-      'North Carolina': '#f0c67a',
-      'New Jersey': '#f0c67a',
-      Connecticut: '#f0c67a',
-      'Rhode Island': '#f0c67a',
-      Massachusetts: '#f0c67a',
+      Texas: '#efc974',
+      Mississippi: '#efc974',
+      Georgia: '#efc974',
+      'North Carolina': '#efc974',
+      'New Jersey': '#efc974',
+      Connecticut: '#efc974',
+      'Rhode Island': '#efc974',
+      Massachusetts: '#efc974',
     },
   },
   Tornado: {
     name: 'Tornado',
-    color: '#7b52ab',
+    color: '#7B5CE6',
     description:
       'Severe supercells colliding over Tornado Alley and Dixie Alley drive intense tornado frequencies.',
     activeStates: {
@@ -107,10 +107,10 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
       Missouri: '#eab676',
       Mississippi: '#eab676',
       Alabama: '#eab676',
-      Arkansas: '#f1d69d',
-      Tennessee: '#f1d69d',
-      Illinois: '#f1d69d',
-      Indiana: '#f1d69d',
+      Arkansas: '#efc974',
+      Tennessee: '#efc974',
+      Illinois: '#efc974',
+      Indiana: '#efc974',
     },
   },
 };
@@ -209,18 +209,19 @@ export default function HazardMapShowcase() {
   }, [isPaused]);
 
   const current = HAZARD_CONFIG[activeHazard];
-  const defaultBaseColor = '#f9efcf';
+  // Inactive states: warm gray-tan, distinct from the cream card and the risk ramp
+  const defaultBaseColor = '#E4DACA';
 
   return (
-    <div className="bg-[#1d1914] border border-white/10 rounded-3xl p-4 sm:p-6 lg:p-8 shadow-2xl overflow-hidden">
+    <div className="bg-[#FFFDF9] border border-[#E3D7C5] rounded-3xl p-4 sm:p-6 lg:p-8 shadow-xl overflow-hidden">
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 lg:gap-10 items-center">
 
         {/* Map */}
         <div className="flex items-center justify-center">
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-3 h-[420px]">
-              <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs font-mono text-gray-500">Loading US geographic boundaries...</span>
+              <div className="w-6 h-6 border-2 border-[#A44A0B] border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs font-mono text-[#6B5B4B]">Loading US geographic boundaries...</span>
             </div>
           ) : (
             <svg viewBox="70 15 720 525" className="w-full h-auto select-none">
@@ -234,7 +235,7 @@ export default function HazardMapShowcase() {
                     key={feature.id || name || idx}
                     d={pathData}
                     fill={fill}
-                    stroke="#1d1914"
+                    stroke="#FFFDF9"
                     strokeWidth="1"
                     strokeLinejoin="round"
                     className="transition-colors duration-700 ease-in-out cursor-pointer hover:opacity-90"
@@ -250,13 +251,10 @@ export default function HazardMapShowcase() {
         {/* Selector panel */}
         <div className="flex flex-col space-y-6">
           <div>
-            <span className="text-xs font-mono uppercase tracking-widest text-[#e29b4d] block mb-2">
-              NOW SHOWING
-            </span>
-            <h3 className="font-display text-4xl font-extrabold text-white tracking-tight">
+            <h3 className="font-display text-4xl font-extrabold text-[#2A1F16] tracking-tight">
               {current.name}
             </h3>
-            <p className="text-base text-gray-400 mt-3 leading-relaxed min-h-[96px]">
+            <p className="text-base text-[#6B5B4B] mt-3 leading-relaxed min-h-[96px]">
               {current.description}
             </p>
           </div>
@@ -274,8 +272,8 @@ export default function HazardMapShowcase() {
                   }}
                   className={`px-4 py-2 rounded-full text-sm flex items-center gap-2 border transition-colors cursor-pointer ${
                     active
-                      ? 'bg-[#efe8dd] text-black font-semibold border-transparent'
-                      : 'bg-transparent text-gray-200 border-white/10 hover:border-white/30'
+                      ? 'bg-[#2A1F16] text-white font-semibold border-[#2A1F16]'
+                      : 'bg-transparent text-[#2A1F16] border-[#E3D7C5] hover:border-[#B87530]'
                   }`}
                 >
                   <span
@@ -289,11 +287,11 @@ export default function HazardMapShowcase() {
           </div>
 
           <div>
-            <div className="h-[3px] w-full bg-white/10 mb-4 rounded-full overflow-hidden">
+            <div className="h-[3px] w-full bg-[#E3D7C5] mb-4 rounded-full overflow-hidden">
               {!isPaused && (
                 <div
                   key={activeHazard}
-                  className="h-full bg-amber-400"
+                  className="h-full bg-[#A44A0B]"
                   style={{ animation: 'cycleProgress 4.5s linear infinite' }}
                 />
               )}
@@ -301,7 +299,7 @@ export default function HazardMapShowcase() {
             <button
               type="button"
               onClick={() => setIsPaused(!isPaused)}
-              className="px-5 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-mono text-gray-200 transition-colors cursor-pointer"
+              className="px-5 py-2 rounded-xl border border-[#E3D7C5] bg-transparent hover:bg-[#EEE5D7] text-sm font-mono text-[#2A1F16] transition-colors cursor-pointer"
             >
               {isPaused ? 'Resume' : 'Pause'}
             </button>
