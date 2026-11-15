@@ -50,120 +50,89 @@ The team will build its own dataset by pulling from free public sources, includi
 | Frontend | Next.js, React, a web mapping library (MapLibre GL or Leaflet), Vercel |
 | Explanations | Claude API |
 
-## Suggested Repository Structure
+## Repository Structure
 
-```
+```text
 RiskResource/
 ├── backend/
-│   ├── ingest/          # fetchers for each data source
-│   ├── features/        # per-hazard feature builders
-│   ├── scoring/         # rule-based scoring
-│   ├── tests/
+│   ├── app/
+│   │   ├── clients/
+│   │   │   ├── __init__.py
+│   │   │   ├── nwps.py
+│   │   │   ├── nws.py
+│   │   │   ├── open_meteo.py
+│   │   │   └── usgs.py
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   └── cache.py
+│   │   ├── domain/
+│   │   │   ├── __init__.py
+│   │   │   ├── geo.py
+│   │   │   ├── hazards.py
+│   │   │   └── scoring.py
+│   │   ├── routers/
+│   │   │   ├── __init__.py
+│   │   │   ├── counties.py
+│   │   │   ├── health.py
+│   │   │   ├── map_values.py
+│   │   │   ├── search.py
+│   │   │   └── states.py
+│   │   ├── services/
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── main.py
+│   │   └── schemas.py
+│   ├── data/
+│   │   └── reference.json
+│   ├── scripts/
+│   │   ├── __init__.py
+│   │   └── build_reference_data.py
+│   ├── env.example
 │   └── requirements.txt
 ├── frontend/
 │   ├── app/
+│   │   ├── about/
+│   │   │   └── page.tsx
+│   │   ├── map/
+│   │   │   └── page.tsx
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   └── page.tsx
 │   ├── components/
+│   │   ├── common/
+│   │   │   ├── Footer.tsx
+│   │   │   └── Navigation.tsx
+│   │   ├── home/
+│   │   │   ├── CtaBanner.tsx
+│   │   │   ├── FeaturesGrid.tsx
+│   │   │   ├── HazardMapShowcase.tsx
+│   │   │   ├── HeroScoreCard.tsx
+│   │   │   ├── HeroSection.tsx
+│   │   │   ├── MiniMapPreview.tsx
+│   │   │   └── StatsSection.tsx
+│   │   └── map/
+│   │       ├── CountyInspector.tsx
+│   │       ├── MapControls.tsx
+│   │       ├── MapLegend.tsx
+│   │       ├── RiskLeafletMap.tsx
+│   │       └── StateInspector.tsx
 │   ├── lib/
+│   │   ├── mockRiskData.ts
+│   │   └── types.ts
 │   ├── public/
-│   └── package.json
-├── model/               # training code and model card
-├── notebooks/           # EDA, scoring validation, model training
-├── visuals/             # EDA plots and architecture flowchart
+│   ├── eslint.config.mjs
+│   ├── next.config.ts
+│   ├── package-lock.json
+│   ├── package.json
+│   └── tsconfig.json
+├── model/
+├── notebooks/
+├── visuals/
+├── .gitignore
 ├── LICENSE
 └── README.md
 ```
-
-## Git and GitHub Workflow for DS3 Projects
-
-Using Git and GitHub well is just as important as writing good code. A clean workflow makes collaboration easier and helps the project stay organized.
-
-### 1. Use branches to separate work
-
-Each person or feature should usually work in its own branch. This prevents people from overwriting each other's changes.
-
-Common branch commands:
-
-```bash
-git branch
-git checkout -b feature/my-task
-git checkout main
-git branch -d feature/my-task
-```
-
-What they mean:
-
-- `git branch` shows existing branches
-- `git checkout -b feature/my-task` creates and switches to a new branch
-- `git checkout main` switches back to the main branch
-- `git branch -d feature/my-task` deletes a branch after it is merged
-
-### 2. Use pull requests to merge code into main
-
-When work is complete, open a Pull Request (PR) from your branch into `main`. A PR is the place to review changes, discuss issues, and confirm everything is ready.
-
-Important rule:
-
-- Only project managers or mentors should approve pull requests.
-- Students should contribute code, but approvals should be handled by the designated maintainers.
-
-### 3. Basic Git commands and what they mean
-
-```bash
-git clone <repo-url>
-git status
-git add <file>
-git add .
-git commit -m "Describe your change"
-git push origin <branch-name>
-git log
-git merge <branch-name>
-git rebase <branch-name>
-```
-
-What they mean:
-
-- `git clone` copies a repository from GitHub to your local machine
-- `git status` shows which files changed and what branch you are on
-- `git add` stages files for commit
-- `git commit` saves staged changes with a message
-- `git push` uploads your local commits to GitHub
-- `git log` shows recent commit history
-- `git merge` combines another branch into your current branch
-- `git rebase` reapplies your commits on top of another branch and can help keep history cleaner
-
-### 4. Recommended team habits
-
-- Pull the latest changes before starting work
-- Keep commits small and descriptive
-- Avoid committing large data files or secrets
-- Open a PR early for feedback, not only at the end
-- Resolve merge conflicts carefully and communicate with the team
-
-### 5. Example workflow
-
-```bash
-git checkout main
-git pull origin main
-git checkout -b feature/data-cleaning
-git status
-git add .
-git commit -m "Add initial data cleaning script"
-git push origin feature/data-cleaning
-```
-
-Then open a Pull Request on GitHub and wait for approval from the appropriate project manager or mentor.
-
-## Notes for DS3 Projects
-
-This template is intentionally simple so students can focus on the science instead of setup. As projects grow, teams can add:
-
-- experiment tracking
-- model checkpoints
-- deployment scripts
-- cloud infrastructure (AWS/GCP) in `infra/`
-- frontend UI/UX code in `frontend/`
-- CI checks
-- docs pages
 
 ## Disclaimer **
 
