@@ -31,15 +31,14 @@ The project will start with a rule-based score. The team will then train a machi
 
 The team will build its own dataset by pulling from free public sources, including:
 
-| Hazard | Planned sources |
-|--------|-----------------|
-| Location | US Census Geocoder |
-| Wildfire | NASA FIRMS satellite detections, NIFC fire perimeters |
-| Flood | USGS stream gauges, NOAA river forecasts, FEMA flood zone maps |
-| Earthquake | USGS earthquake catalog and fault database |
-| Severe weather | National Weather Service alerts |
-| Weather conditions | Open-Meteo |
-| All hazards | FEMA National Risk Index, OpenFEMA disaster declarations, GDACS |
+| Hazard / Category | Sources |
+|-------------------|---------|
+| Location & Boundaries | Open-Meteo Geocoding API, Plotly US Counties GeoJSON, US Census Population Estimates |
+| Severe Weather & Hazards | National Weather Service (NWS) Active Alerts API |
+| Weather Conditions & Wildfire | Open-Meteo Forecast API |
+| Flood | NOAA National Water Prediction Service (NWPS) Gauges API, NWS Active Alerts |
+| Earthquake | USGS Earthquake Catalog API |
+| Historical Baseline | OpenFEMA Disaster Declarations Summaries API |
 
 ## Planned Tech Stack
 
