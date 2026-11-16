@@ -1,7 +1,7 @@
 // frontend/app/map/page.tsx
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import Navigation from '@/components/common/Navigation';
@@ -25,6 +25,14 @@ const STATE_NAMES: Record<string, string> = {
 
 export default function RiskMapPage() {
   const rootRef = useRef<HTMLDivElement>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  // Optional: Initialize map theme from user's OS preference on mount
+  useEffect(() => {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setTheme('dark');
+    }
+  }, []);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -494,7 +502,7 @@ export default function RiskMapPage() {
         }
       });
 
-     function setGeo(geo: string, instant?: boolean) {
+		function setGeo(geo: string, instant?: boolean) {
         state.geo = geo;
         $$('#geoSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.geo === geo)));
         gCounties.style('display', geo === 'counties' ? '' : 'none');
@@ -775,6 +783,8 @@ export default function RiskMapPage() {
     };
   }, []);
 
+  const isDark = theme === 'dark';
+
   return (
     <div className="min-h-screen flex flex-col justify-between" ref={rootRef}>
       <style>{`
@@ -800,14 +810,13 @@ export default function RiskMapPage() {
           color: var(--ink);
           font: 400 16px/1.55 var(--font-body);
           flex: 1;
+          transition: background-color 0.2s ease, color 0.2s ease;
         }
-        @media (prefers-color-scheme: dark) {
-          .proto-scope {
-            --bg: #17110C; --surface: #211912; --surface-2: #2D2219; --ink: #F1E7DA; --muted: #B5A592; --line: #3A2D22;
-            --accent: #F2A541; --accent-ink: #231A13; --accent-soft: #3A2A15;
-            --map-stroke: #17110C; --map-border: #A8987F; --warn: #F2C66B; --warn-soft: #3A2E12;
-            --shadow: 0 18px 48px rgba(0, 0, 0, .45);
-          }
+        .proto-scope.dark-mode {
+          --bg: #17110C; --surface: #211912; --surface-2: #2D2219; --ink: #F1E7DA; --muted: #B5A592; --line: #3A2D22;
+          --accent: #F2A541; --accent-ink: #231A13; --accent-soft: #3A2A15;
+          --map-stroke: #17110C; --map-border: #A8987F; --warn: #F2C66B; --warn-soft: #3A2E12;
+          --shadow: 0 18px 48px rgba(0, 0, 0, .45);
         }
         .proto-scope * { box-sizing: border-box; }
         .proto-scope h1, .proto-scope h2, .proto-scope h3 { font-family: var(--font-display); letter-spacing: -0.02em; margin: 0; line-height: 1.04; }
@@ -815,6 +824,8 @@ export default function RiskMapPage() {
         .proto-scope .wrap { max-width: 1240px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
         .proto-scope .eyebrow { font: 500 12px/1.2 var(--font-mono); letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
         .proto-scope .sample-pill { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; padding: 5px 9px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); white-space: nowrap; }
+        .proto-scope .theme-toggle { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 500 12px/1 var(--font-mono); cursor: pointer; transition: border-color 0.15s ease, background-color 0.15s ease; }
+        .proto-scope .theme-toggle:hover { border-color: var(--ink); }
         .proto-scope .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
         .proto-scope .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid transparent; font-weight: 600; font-size: 15px; cursor: pointer; }
         .proto-scope .btn-ghost { background: transparent; border-color: var(--line); color: var(--ink); }
@@ -853,7 +864,7 @@ export default function RiskMapPage() {
         .proto-scope .mapwrap { flex: 999 1 600px; min-width: 0; position: relative; border-top: 1px solid var(--line); background: var(--bg); }
         .proto-scope .mapwrap svg { display: block; width: 100%; height: auto; touch-action: none; cursor: grab; }
         .proto-scope .mapwrap svg:active { cursor: grabbing; }
-        .proto-scope .county, .proto-scope .state { stroke: var(--map-stroke); vector-effect: non-scaling-stroke; transition: opacity .25s ease; cursor: pointer; }
+        .proto-scope .county, .proto-scope .state { stroke: var(--map-stroke); vector-effect: non-scaling-stroke; transition: opacity .25s ease, stroke .2s ease; cursor: pointer; }
         .proto-scope .county { stroke-width: .35; }
         .proto-scope .state { stroke-width: .9; }
         .proto-scope .dim { opacity: .18; }
@@ -903,14 +914,42 @@ export default function RiskMapPage() {
 
       <Navigation />
 
-      <div className="proto-scope">
+      <div className={`proto-scope${isDark ? ' dark-mode' : ''}`}>
         <div className="wrap mapview">
           <div className="map-title">
             <div>
               <span className="eyebrow">Risk map</span>
               <h1>US natural disaster risk</h1>
             </div>
-            <span className="sample-pill">Sample values, not FEMA data</span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+
+              {/* Light / Dark Mode Toggle */}
+              <button
+                type="button"
+                className="theme-toggle"
+                onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                aria-pressed={isDark}
+                aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+              >
+                {isDark ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="4" />
+                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                    </svg>
+                    Light mode
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+                    </svg>
+                    Dark mode
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="toolbar">
