@@ -765,7 +765,41 @@ export default function RiskMapPage() {
       renderHazRow();
       setGeo('counties', true);
       recolor(true);
-      select('state', '06');
+
+	  const qParam = new URLSearchParams(window.location.search).get('q')?.trim().toLowerCase();
+      if (qParam) {
+        const normalized = qParam
+          .replace(/,/g, '')
+          .replace(/\bcounty\b/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        const match =
+          searchIndex.find((it) => it.key === normalized || it.label.toLowerCase() === qParam) ||
+          searchIndex
+            .filter((it) => it.key.includes(normalized) || normalized.includes(it.key))
+            .sort((a, b) => (a.kind === 'county' ? -1 : 1))[0];
+
+        if (match) {
+          const searchInput = $('#mapSearch') as HTMLInputElement | null;
+          if (searchInput) searchInput.value = match.label;
+
+          if (match.kind === 'state') {
+            setGeo('counties');
+            select('state', match.id);
+            focusState(match.id, true);
+          } else {
+            setGeo('counties');
+            select('county', match.id);
+            focusState(match.id.slice(0, 2));
+            zoomTo(C.get(match.id).feature, 0.1);
+          }
+        } else {
+          select('state', '06');
+        }
+      } else {
+        select('state', '06');
+      }
     }
 
     boot();
