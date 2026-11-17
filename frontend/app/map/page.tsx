@@ -3,6 +3,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import * as d3 from 'd3';
+import * as topojson from 'topojson-client';
 import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
 import MapControls, { Measure } from '@/components/map/MapControls';

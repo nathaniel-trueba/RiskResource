@@ -50,25 +50,86 @@ The team will build its own dataset by pulling from free public sources, includi
 | Frontend | Next.js, React, a web mapping library (MapLibre GL or Leaflet), Vercel |
 | Explanations | Claude API |
 
-## Suggested Repository Structure
+## Repository Structure
 
-```
+```text
 RiskResource/
 ├── backend/
-│   ├── ingest/          # fetchers for each data source
-│   ├── features/        # per-hazard feature builders
-│   ├── scoring/         # rule-based scoring
-│   ├── tests/
+│   ├── app/
+│   │   ├── clients/
+│   │   │   ├── __init__.py
+│   │   │   ├── nwps.py
+│   │   │   ├── nws.py
+│   │   │   ├── open_meteo.py
+│   │   │   └── usgs.py
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   └── cache.py
+│   │   ├── domain/
+│   │   │   ├── __init__.py
+│   │   │   ├── geo.py
+│   │   │   ├── hazards.py
+│   │   │   └── scoring.py
+│   │   ├── routers/
+│   │   │   ├── __init__.py
+│   │   │   ├── counties.py
+│   │   │   ├── health.py
+│   │   │   ├── map_values.py
+│   │   │   ├── search.py
+│   │   │   └── states.py
+│   │   ├── services/
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── main.py
+│   │   └── schemas.py
+│   ├── data/
+│   │   └── reference.json
+│   ├── scripts/
+│   │   ├── __init__.py
+│   │   └── build_reference_data.py
+│   ├── env.example
 │   └── requirements.txt
 ├── frontend/
 │   ├── app/
+│   │   ├── about/
+│   │   │   └── page.tsx
+│   │   ├── map/
+│   │   │   └── page.tsx
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   └── page.tsx
 │   ├── components/
+│   │   ├── common/
+│   │   │   ├── Footer.tsx
+│   │   │   └── Navigation.tsx
+│   │   ├── home/
+│   │   │   ├── CtaBanner.tsx
+│   │   │   ├── FeaturesGrid.tsx
+│   │   │   ├── HazardMapShowcase.tsx
+│   │   │   ├── HeroScoreCard.tsx
+│   │   │   ├── HeroSection.tsx
+│   │   │   ├── MiniMapPreview.tsx
+│   │   │   └── StatsSection.tsx
+│   │   └── map/
+│   │       ├── CountyInspector.tsx
+│   │       ├── MapControls.tsx
+│   │       ├── MapLegend.tsx
+│   │       ├── RiskLeafletMap.tsx
+│   │       └── StateInspector.tsx
 │   ├── lib/
+│   │   ├── mockRiskData.ts
+│   │   └── types.ts
 │   ├── public/
-│   └── package.json
-├── model/               # training code and model card
-├── notebooks/           # EDA, scoring validation, model training
-├── visuals/             # EDA plots and architecture flowchart
+│   ├── eslint.config.mjs
+│   ├── next.config.ts
+│   ├── package-lock.json
+│   ├── package.json
+│   └── tsconfig.json
+├── model/
+├── notebooks/
+├── visuals/
+├── .gitignore
 ├── LICENSE
 └── README.md
 ```
