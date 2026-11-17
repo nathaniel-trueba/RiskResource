@@ -40,7 +40,7 @@ the backend talks to the database. The other settings in `env.example` are optio
 Start the API:
 
 ```bash
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload
 ```
 
 On the first start against an empty database, the API creates the tables and seeds
