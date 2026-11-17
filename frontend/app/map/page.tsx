@@ -3,14 +3,13 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import * as d3 from 'd3';
-import * as topojson from 'topojson-client';
 import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
 import MapControls, { Measure } from '@/components/map/MapControls';
 import MapLegend from '@/components/map/MapLegend';
 import StateInspector from '@/components/map/StateInspector';
 import CountyInspector from '@/components/map/CountyInspector';
+import type { MapFocus } from '@/components/map/RiskLeafletMap';
 import { fetchCounty, fetchMapValues, fetchState, HazardKey, MapMetric, searchCounties } from '@/lib/api';
 import { formatPct, formatUsd } from '@/lib/format';
 import { bandColor, HAZARDS, quantileBands, SCORE_BANDS } from '@/lib/riskColors';
@@ -47,6 +46,9 @@ export default function RiskMapPage() {
   const [hazard, setHazard] = useState<HazardKey | null>(null); // null: all hazards
   const [selectedState, setSelectedState] = useState<StateRecord | null>(null);
   const [selectedCounty, setSelectedCounty] = useState<CountyRecord | null>(null);
+  // Area the map is zoomed to: a state after "View county breakdown", or a county
+  // opened from a homepage search. Null: national view.
+  const [focus, setFocus] = useState<MapFocus | null>(null);
   const [loading, setLoading] = useState(true); // The first area loads on mount
   const [error, setError] = useState<string | null>(null);
 
@@ -94,9 +96,9 @@ export default function RiskMapPage() {
   );
 
   // Load a county, and its state too if it's in a different state than the panel's,
-  // so "Back to <state>" shows the county's own state.
+  // so "Back to <state>" shows the county's own state. `zoom` also zooms the map to it.
   const loadCounty = useCallback(
-    (fips: string, request: number) => {
+    (fips: string, request: number, zoom = false) => {
       fetchCounty(fips)
         .then(async (county) => {
           const state =
@@ -107,6 +109,7 @@ export default function RiskMapPage() {
           if (state) setSelectedState(state);
           setSelectedCounty(county);
           setViewMode('counties');
+          if (zoom) setFocus({ type: 'county', id: fips });
           finishRequest(request);
         })
         .catch((err) => finishRequest(request, err, `county ${fips}`));
@@ -115,18 +118,18 @@ export default function RiskMapPage() {
   );
 
   // First load: a county from the URL (?fips=06065 or ?q=Palm Springs, CA, as the
-  // home page links), otherwise the default state.
+  // home page links), zoomed in, otherwise the default state.
   useEffect(() => {
     const request = ++latestRequest.current;
     const params = new URLSearchParams(window.location.search);
     const fips = params.get('fips');
     const query = params.get('q');
     if (fips) {
-      loadCounty(fips, request);
+      loadCounty(fips, request, true);
     } else if (query) {
       searchCounties(query, 1)
         .then((results) => {
-          if (results.length > 0) loadCounty(results[0].fips, request);
+          if (results.length > 0) loadCounty(results[0].fips, request, true);
           else loadState(DEFAULT_STATE_CODE, request);
         })
         .catch(() => loadState(DEFAULT_STATE_CODE, request));
@@ -161,11 +164,19 @@ export default function RiskMapPage() {
     else loadState(id, startRequest());
   };
 
-  // Called when clicking "View county breakdown": show the county map, and keep the
-  // state panel until a county is clicked.
+  // Called when clicking "View county breakdown": show the county map zoomed to the
+  // state, and keep the state panel until a county is clicked.
   const handleDrillDownToCounties = () => {
     setViewMode('counties');
     setSelectedCounty(null);
+    setFocus(selectedState ? { type: 'state', id: selectedState.code } : null);
+  };
+
+  // Back to the national states view, zoomed out.
+  const showAllStates = () => {
+    setViewMode('states');
+    setSelectedCounty(null);
+    setFocus(null);
   };
 
   // Legend, colours and tooltips for the current measure
@@ -206,8 +217,9 @@ export default function RiskMapPage() {
         <MapControls
           viewMode={viewMode}
           onViewModeChange={(mode) => {
+            if (mode === 'states') return showAllStates();
             setViewMode(mode);
-            if (mode === 'states') setSelectedCounty(null);
+            setFocus(null); // The Counties toggle shows the whole country
           }}
           measure={measure}
           onMeasureChange={setMeasure}
@@ -233,6 +245,7 @@ export default function RiskMapPage() {
               colorFor={(value) => bandColor(value, bands)}
               describe={describe}
               onSelectFeature={handleFeatureSelect}
+              focus={focus}
             />
             <MapLegend title={legend.title} bands={bands} note={legend.note} />
           </div>
@@ -247,10 +260,7 @@ export default function RiskMapPage() {
             {viewMode === 'counties' && selectedCounty ? (
               <CountyInspector
                 county={selectedCounty}
-                onBackToState={() => {
-                  setViewMode('states');
-                  setSelectedCounty(null);
-                }}
+                onBackToState={showAllStates}
               />
             ) : selectedState ? (
               <StateInspector

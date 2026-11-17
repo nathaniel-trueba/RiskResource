@@ -1,7 +1,3 @@
-'use client';
-
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
 import HeroScoreCard from '@/components/home/HeroScoreCard';
@@ -9,28 +5,7 @@ import HazardMapShowcase from '@/components/home/HazardMapShowcase';
 import FeaturesGrid from '@/components/home/FeaturesGrid';
 import HomeSearch from '@/components/home/HomeSearch';
 
-const QUICK_LOCATIONS = [
-  { label: 'Palm Springs, CA', query: 'Riverside County, CA' },
-  { label: 'Santa Rosa, CA', query: 'Sonoma County, CA' },
-  { label: 'Fresno, CA', query: 'Fresno County, CA' },
-  { label: 'San Diego, CA', query: 'San Diego County, CA' },
-];
-
 export default function HomePage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const router = useRouter();
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = searchQuery.trim();
-    if (!trimmed) return;
-    router.push(`/map?q=${encodeURIComponent(trimmed)}`);
-  };
-
-  const handleChipClick = (query: string) => {
-    router.push(`/map?q=${encodeURIComponent(query)}`);
-  };
-
   return (
     <div className="min-h-screen bg-[#1a1612] text-white flex flex-col justify-between antialiased selection:bg-amber-900/60">
       <Navigation />

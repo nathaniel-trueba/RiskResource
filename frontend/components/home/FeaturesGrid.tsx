@@ -19,9 +19,9 @@ export default function FeaturesGrid() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={hoverCard}>
           <div>
-            <span className="text-xl mb-3 block text-amber-400">🗺️</span>
-            <h3 className="text-sm font-bold text-white">Explore the risk map</h3>
-            <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+            <span className="text-xl mb-3 block">🗺️</span>
+            <h3 className="text-sm font-bold text-[#2A1F16]">Explore the risk map</h3>
+            <p className="text-xs text-[#6B5B4B] mt-2 leading-relaxed">
               Switch between states and counties and color the map by risk score, FEMA&apos;s expected loss per person or in total, or the share of residents in high-loss counties.
             </p>
           </div>
@@ -57,9 +57,9 @@ export default function FeaturesGrid() {
 
         <div className={hoverCard}>
           <div>
-            <span className="text-xl mb-3 block text-amber-400">🗄️</span>
-            <h3 className="text-sm font-bold text-white">Built on public data</h3>
-            <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+            <span className="text-xl mb-3 block">🗄️</span>
+            <h3 className="text-sm font-bold text-[#2A1F16]">Built on public data</h3>
+            <p className="text-xs text-[#6B5B4B] mt-2 leading-relaxed">
               Loss estimates come from FEMA&apos;s National Risk Index. Scores combine FEMA disaster declarations, USGS earthquakes and live NWS alerts.
             </p>
           </div>
