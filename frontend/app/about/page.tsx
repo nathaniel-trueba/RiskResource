@@ -3,6 +3,8 @@
 import React from 'react';
 import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
+import Link from 'next/link';
+import ScoreExplainer from '@/components/about/ScoreExplainer';
 import { NRI_HAZARDS_EXCLUDED, NRI_HAZARDS_INCLUDED } from '@/lib/nri';
 
 interface DataSource {
@@ -124,6 +126,7 @@ export default function AboutDataPage() {
             </div>
           </div>
         </section>
+      <ScoreExplainer />
 
         {/* Expected annual loss */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80">
