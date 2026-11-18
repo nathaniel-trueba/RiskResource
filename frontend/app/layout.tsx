@@ -18,11 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${bricolage.variable} ${dmSans.variable} ${jetbrains.variable}`}
-    >
-      <body className="font-sans bg-[#1a1612] text-white min-h-screen antialiased selection:bg-amber-900/60 selection:text-white">
+    <html lang="en" className="light">
+      <body className="min-h-screen bg-[#fcfbf7] text-[#111827] antialiased">
         {children}
       </body>
     </html>

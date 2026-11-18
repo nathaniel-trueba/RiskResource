@@ -2,7 +2,7 @@
 
 Audience: developers and coding agents working on the backend or connecting the frontend to it.
 
-Snapshot: 2026-11-14, at commit `221a0c8` on `add-backend-connect-supabase`. If this doc and the code disagree, the code wins, and this doc should be updated.
+Snapshot: 2026-11-18, matching `main` at `c25e614`. The backend code hasn't changed since it was merged (PR #12). If this doc and the code disagree, the code wins, and this doc should be updated.
 
 Related docs:
 
@@ -50,6 +50,8 @@ python -m uvicorn app.main:app --reload --port 8000
 
 It was developed on Python 3.14 and needs at least 3.11. Run commands from `backend/`, or the `app` package won't be found.
 
+Use `python -m uvicorn`, not `uvicorn`. On Windows, Smart App Control can block the unsigned `uvicorn.exe` launcher that pip installs ("An Application Control policy has blocked this file"). Running it through Python avoids that.
+
 ### Database connection
 
 `DATABASE_URL` is the only required setting. To get it:
@@ -59,7 +61,7 @@ It was developed on Python 3.14 and needs at least 3.11. Run commands from `back
 
 The backend connects as the `postgres` role and uses no Supabase API keys. If `DATABASE_URL` is missing or still has the placeholder, startup stops with a message saying so.
 
-**`backend/.env` holds the database password.** It's git-ignored by `.env` and `**/.env` in the root `.gitignore`. Never commit it. Branches created before that `.gitignore` change don't ignore it.
+**`backend/.env` holds the database password.** It's git-ignored by the `.env` rule in the root `.gitignore`, which matches in any folder. Never commit it. Branches created before that `.gitignore` change don't ignore it.
 
 ### First start and seeding
 
@@ -484,18 +486,46 @@ County IDs come from the same GeoJSON file the frontend draws, so every `MapValu
 - **River flooding hasn't been seen live.** Live NWPS responses were parsed without errors, but none showed a gauge above flood stage. That branch was only tested with sample data.
 - **The cache is per-process.** Running several workers multiplies upstream calls.
 - **The database is a single point of failure at startup.** If Supabase is paused (free projects pause after about a week of inactivity) or unreachable, the API won't start. Open the Supabase dashboard and restore the project before a demo.
-- **Informational only.** This isn't a substitute for official warnings, as the site's footer says.
+- **Informational only.** This isn't a substitute for official warnings. The repo README says so, but the site itself doesn't show a disclaimer yet (see [`human-review.md`](human-review.md)).
 
 ## 11. How the frontend connects
 
 The browser calls this API directly, through [`frontend/lib/api.ts`](../frontend/lib/api.ts). The browser never talks to Supabase. [The frontend doc](frontend-doc.md#calls-by-user-action) lists which user action makes which call.
 
 - The base URL is `NEXT_PUBLIC_API_URL`, which defaults to `http://localhost:8000/api`.
-- CORS allows `http://localhost:3000` and `http://127.0.0.1:3000`, for `GET` only. When deploying, add the site's origin to `CORS_ORIGINS` and set `NEXT_PUBLIC_API_URL` before building the frontend.
+- CORS allows `http://localhost:3000` and `http://127.0.0.1:3000`, for `GET` only.
+
+### Deploying
+
+At this snapshot the frontend has been deployed but the backend hasn't, so the deployed site can't load any data. It falls back to `http://localhost:8000/api`, which each visitor's browser looks for on their own machine.
+
+**Host the backend as a long-running server, not as serverless functions** such as Vercel's Python runtime. The design depends on staying up: it loads the reference data once at startup, warms the national snapshot in a background task, and caches live feeds in memory across requests. A free Render web service fits, and connects to GitHub to redeploy on every push. The repo owner is setting one up.
+
+| Setting | Value |
+|---|---|
+| Root directory | `backend` |
+| Build command | `pip install -r requirements.txt` |
+| Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Health check path | `/api/health` |
+| `DATABASE_URL` | The Supabase session pooler string |
+| `CORS_ORIGINS` | A JSON list with the site's origin, no trailing slash, e.g. `["https://<site>.vercel.app"]` |
+| `PYTHON_VERSION` | Pin one the dependencies build on, e.g. `3.13.1` |
+
+Then on the frontend host, set `NEXT_PUBLIC_API_URL` to the backend URL **including `/api`**, and redeploy, because Next.js fixes it at build time. Both URLs must be `https`, or browsers block the calls as mixed content.
+
+On a free tier that sleeps when idle (Render's does after 15 minutes), the first request after a sleep waits for the server to start and reload its data from Supabase.
+
+| Symptom in the browser's dev tools | Cause |
+|---|---|
+| Requests to `localhost:8000`, `ERR_CONNECTION_REFUSED` | `NEXT_PUBLIC_API_URL` unset, or set without a redeploy |
+| "blocked by CORS policy" | The site's origin isn't in `CORS_ORIGINS` |
+| "Mixed Content" | The API URL is `http://` |
+| 404 on `/states/...` or `/map-values` | `NEXT_PUBLIC_API_URL` is missing `/api` |
+| 5xx, or a very slow first request | The backend crashed (check `DATABASE_URL`) or is waking up |
 
 ## 12. Guidance for coding agents
 
-- Never print, log or commit the contents of `backend/.env`. To check it, print key names only.
+- Never print, log or commit the contents of `backend/.env`. To check it, print key names only. The same goes for the hosting platform's environment variables.
 - Don't commit. The team makes all commits.
 - Keep `app/schemas.py` and `frontend/lib/types.ts` in sync.
 - Put scoring rules in `domain/`, and don't add I/O there.

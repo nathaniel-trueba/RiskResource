@@ -4,7 +4,7 @@ Audience: developers and coding agents working on the backend.
 
 This doc lists exactly what the backend calls and what it does with the results. For how the pieces fit together, see [`backend-doc.md`](backend-doc.md). For the list of APIs the team chose, see [`apis.md`](apis.md).
 
-Snapshot: 2026-11-14, at commit `221a0c8` on `add-backend-connect-supabase`. Limits are as documented or observed then.
+Snapshot: 2026-11-18, matching `main` at `c25e614`. The backend's API calls haven't changed since 2026-11-14 (`221a0c8`), when the limits and row counts below were documented or observed.
 
 The backend also uses a Supabase Postgres database. That's our own storage, not an external data API, so it's covered in [`backend-doc.md`](backend-doc.md#8-database) instead.
 

@@ -2,7 +2,7 @@
 
 Audience: developers and coding agents working on the frontend or the backend that feeds it.
 
-Snapshot: 2026-11-14, at commit `221a0c8` on `add-backend-connect-supabase`. Line references will drift. If this doc and the code disagree, the code wins, and this doc should be updated.
+Snapshot: 2026-11-18, matching `main` at `c25e614` (after PR #18). Line references will drift. If this doc and the code disagree, the code wins, and this doc should be updated.
 
 Related docs:
 
@@ -11,7 +11,7 @@ Related docs:
 
 ## 1. Summary
 
-Risk Resource is a prototype site for US natural disaster risk, with three routes: a landing page, an interactive risk map and a methodology page.
+Risk Resource is a prototype site for US natural disaster risk, with three routes: a landing page, an interactive risk map and a methodology page. The site is locked to a light theme.
 
 **Every page that renders gets its risk data from the FastAPI backend.** The backend must be running for scores and losses to appear. Without it, pages still load and show error or "unavailable" text. The browser never talks to Supabase directly.
 
@@ -27,7 +27,7 @@ The site shows two different kinds of number, and labels them differently:
 
 | Area | Details |
 |---|---|
-| Framework | Next.js 16.4.3 (App Router, Turbopack), React 19.3 |
+| Framework | Next.js ^16.4.6 (App Router, Turbopack), React 19.3. 16.4.3 had a known security vulnerability |
 | Language | TypeScript in strict mode, with the path alias `@/*` pointing at `frontend/*` |
 | Styling | Tailwind CSS v4, through the `@tailwindcss/turbopack` loader in `next.config.ts` |
 | Map | Leaflet 1.9 and react-leaflet 5 |
@@ -44,13 +44,13 @@ npx tsc --noEmit
 | Check at this snapshot | Result |
 |---|---|
 | `npx tsc --noEmit` | Passes |
-| `npm run lint` | 2 errors (`react/no-unescaped-entities`), both in unused components: `CtaBanner.tsx` and `HeroSection.tsx` |
-| `npm run build` | Not run at this snapshot |
+| `npm run lint` | 0 errors, 4 warnings: an unused `Link` import in `app/about/page.tsx`, and three unused fonts in `app/layout.tsx` (see [section 7](#7-known-issues)) |
+| `npm run build` | Passes |
 | Tests and CI | None exist |
 
 `tsc` writes `tsconfig.tsbuildinfo`, which isn't git-ignored. Delete it rather than committing it.
 
-**Environment variables,** both optional, set in `frontend/.env.local`. The `NEXT_PUBLIC_` prefix means values ship to browsers and are fixed at build time.
+**Environment variables,** both optional locally, set in `frontend/.env.local`. The `NEXT_PUBLIC_` prefix means values ship to browsers and are **fixed at build time**: after changing one on a host such as Vercel, redeploy. A deployed site needs `NEXT_PUBLIC_API_URL`, or it calls `localhost` on each visitor's own machine (see [`backend-doc.md`](backend-doc.md#deploying)).
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -62,35 +62,36 @@ npx tsc --noEmit
 ```
 frontend/
   app/
-    layout.tsx               Root layout and fonts
+    layout.tsx               Root layout; locks the light theme. Loads fonts but doesn't apply them
     page.tsx                 /       Landing page
     map/page.tsx             /map    Owns all map state and data fetching
     about/page.tsx           /about  Methodology, mostly static content
   components/
-    common/                  Navigation, Footer
+    common/                  Navigation, Footer (data feed links, DS3 link, team placeholders)
     home/
       HomeSearch.tsx         Search box and "Try:" chips; sends to /map?q=
       HeroScoreCard.tsx      Live county data for 4 preset places
       HazardMapShowcase.tsx  SVG state map coloured by real per-hazard scores
       FeaturesGrid.tsx       Static content
-      HeroSection.tsx, MiniMapPreview.tsx, StatsSection.tsx, CtaBanner.tsx    Unused
+    about/
+      ScoreExplainer.tsx     Interactive sliders; client-side only, no backend data
     map/
-      RiskLeafletMap.tsx     Leaflet map; fetches GeoJSON; loaded with ssr: false
+      RiskLeafletMap.tsx     Leaflet map; fetches GeoJSON; zooms to a focus; loaded with ssr: false
       MapControls.tsx        View toggle, "Show" dropdown, hazard buttons, county search
       MapLegend.tsx          Colour bands for the current measure
       StateInspector.tsx, CountyInspector.tsx    Side panels
       ExpectedLossSection.tsx    FEMA loss section, shared by both side panels
-      CartogramGrid.tsx      Unused
   lib/
     api.ts                   Every backend call
     types.ts                 API response types
     riskColors.ts            Colour bands, hazard list, hazard colours
     format.ts                Dollar and percent formatting
     nri.ts                   What the loss figures include and leave out
-    mockRiskData.ts          Old mock data; only the unused CartogramGrid imports it
 ```
 
-**Unused files:** `HeroSection`, `MiniMapPreview`, `StatsSection`, `CtaBanner` and `CartogramGrid` aren't imported by any page, and they still contain hard-coded sample data. `CartogramGrid` is the only importer of `mockRiskData.ts`. All six could be deleted.
+Every component is in use. The old sample-data components (`HeroSection`, `MiniMapPreview`, `StatsSection`, `CtaBanner`, `CartogramGrid`) and `lib/mockRiskData.ts` were deleted.
+
+**`ScoreExplainer` doesn't describe this site's score.** It computes a score from expected loss × a vulnerability/resilience factor, which resembles FEMA's NRI method. The site's risk score comes from FEMA declarations plus live signals ([`backend-doc.md`](backend-doc.md#5-scoring-model)), and NRI losses aren't part of it. It sits directly under "How the score is built" on `/about`. See [`human-review.md`](human-review.md).
 
 ### `/map` data flow
 
@@ -102,6 +103,7 @@ frontend/
 | `measureChoice` | `'score' \| 'lossPerPerson' \| 'totalLoss' \| 'highLossPct'` | The "Show" dropdown |
 | `hazard` | `HazardKey \| null` | The hazard buttons. `null` is "All hazards" |
 | `selectedState`, `selectedCounty` | Records or `null` | What the side panel shows |
+| `focus` | `MapFocus \| null` (`{ type: 'state' \| 'county', id }`) | What the map is zoomed to. `null` is the national view. See [section 5](#zooming) |
 | `loading`, `error` | | Side panel request status |
 | `mapValues` | Cache keyed by `level:metric:hazard` | Map colours already fetched, so switching back is instant |
 | `mapError` | | Map colour request status |
@@ -119,9 +121,9 @@ Two values are derived rather than stored:
 
 | Parameter | Effect |
 |---|---|
-| `?fips=06065` | Opens that county |
-| `?q=Palm Springs, CA` | Searches, opens the best match. Falls back to California if nothing matches |
-| None | Opens California |
+| `?fips=06065` | Opens that county and zooms to it |
+| `?q=Palm Springs, CA` | Searches, opens the best match and zooms to it. Falls back to California, unzoomed, if nothing matches |
+| None | Opens California, unzoomed |
 
 ### Calls by user action
 
@@ -129,9 +131,11 @@ Two values are derived rather than stored:
 |---|---|---|
 | Open `/map`, switch view, change "Show", or pick a hazard | `GET /map-values?level=&metric=&hazard=` (unless cached) | Recolours the map and legend |
 | Open `/map`, or click a state | `GET /states/{code}` | `StateInspector` |
-| Click a county, or a search result | `GET /counties/{fips}`, plus `GET /states/{code}` if the state changed | `CountyInspector` |
+| Click a county, or a search result | `GET /counties/{fips}`, plus `GET /states/{code}` if the state changed | `CountyInspector`. The map doesn't move |
+| Click "View county breakdown" | None | County layer, zoomed to the state |
+| Click the States toggle, the Counties toggle, or "Back" in the county panel | None (map values may load) | Zooms back to the national view |
 | Type in the map search | `GET /search?q=&limit=8`, 250 ms after the last keystroke | Results list. Enter opens the first |
-| Arrive with `?q=` | `GET /search?q=&limit=1` | Opens the match |
+| Arrive with `?q=` | `GET /search?q=&limit=1` | Opens the match, zoomed to it |
 | Open `/` | `GET /counties/06097` (Santa Rosa, the default preset) | `HeroScoreCard`. Other presets fetch on click, once each |
 | Open `/` | 5 × `GET /map-values?level=state&metric=<hazard>` | `HazardMapShowcase` |
 | Search or click a chip on `/` | None | Navigates to `/map?q=` |
@@ -212,7 +216,7 @@ export interface StateExpectedLoss extends ExpectedLoss {
 export interface StateRecord {
   code: string;        // Matches the state GeoJSON feature ID, e.g. "CA"
   name: string;
-  row?: number; col?: number;         // Only used by the unused CartogramGrid
+  row?: number; col?: number;         // Leftover: CartogramGrid was deleted, and the API never sends these
   compositeScore: number;
   tier: Tier;
   countiesCount: number;
@@ -276,8 +280,28 @@ interface Props {
   colorFor: (value: number | undefined) => string;
   describe: (value: MapValue) => string;        // Tooltip line, may contain HTML
   onSelectFeature?: (id: string, type: 'state' | 'county') => void;
+  focus?: MapFocus | null;                      // Area to zoom to; null is the national view
 }
 ```
+
+### Zooming
+
+`RiskLeafletMap` exports `MapFocus` (`{ type: 'state' | 'county', id }`, where `id` is a postal code or FIPS). A `FocusOn` child component reads the map with react-leaflet's `useMap` and:
+
+- **Focus set:** flies to the area's bounds, at most zoom 7 for a state and 8 for a county, so a small county still shows its surroundings.
+- **Focus cleared:** flies back to the national view (`DEFAULT_CENTER`, `DEFAULT_ZOOM`), but only after a zoom-in, so the first load doesn't animate.
+- **Boundaries still loading:** waits, and zooms once the GeoJSON arrives. A search can resolve before the 3.2 MB counties file does.
+
+Bounds come from `boundsOf()`, not Leaflet's own `getBounds()`. It shifts positive longitudes west by 360°, because Alaska's Aleutian Islands cross the 180° line, which gave Alaska a box spanning the whole globe. Every US area is in the western hemisphere otherwise. The westernmost islands are drawn on the neighbouring copy of the world, so they're just off-screen after zooming.
+
+What sets the focus is in `app/map/page.tsx`:
+
+| Trigger | Focus |
+|---|---|
+| "View county breakdown" | The selected state |
+| First load with `?fips=` or `?q=` (`loadCounty(..., zoom = true)`) | The county |
+| States toggle, Counties toggle, county panel "Back" (`showAllStates`) | `null` |
+| Clicking the map, or a map search result | Unchanged |
 
 Other things to know:
 
@@ -302,11 +326,14 @@ There's no retry button anywhere: reload the page.
 
 ## 7. Known issues
 
-- **About page and footer still make claims that aren't true.** The NRI parts were corrected, but `/about` still describes HRRR wind models, NIFC fire perimeters, ShakeMap ground acceleration, a "Wind × (100 − RH)" index and flood crest thresholds that the backend doesn't use. The footer lists NIFC as a source. See [`human-review.md`](human-review.md).
+- **`/about` still makes claims that aren't true.** The NRI parts were corrected, but it still describes HRRR wind models, NIFC fire perimeters, ShakeMap ground acceleration, a "Wind × (100 − RH)" index and flood crest thresholds that the backend doesn't use. `ScoreExplainer` describes a different scoring formula (see [section 3](#3-structure)). See [`human-review.md`](human-review.md).
+- **Footer:** the data feed list now matches the live sources and no longer lists NIFC, but it doesn't list FEMA's NRI, which every loss figure comes from. The Team column is four "Member N" placeholders linking to `#`.
+- **No disclaimer on the site.** Nothing says the site is informational and not a substitute for official warnings. Only the repo README says so.
+- **Fonts aren't applied.** `app/layout.tsx` creates Bricolage Grotesque, DM Sans and JetBrains Mono, but doesn't add their `.variable` classes to `<html>`, so `font-display` and `font-mono` fall back to system fonts. `ScoreExplainer` loads its own fonts separately.
 - **DC and Puerto Rico** have no state polygons, so they're only reachable through the county view or search. The API does return them at state level.
-- **The selected area isn't highlighted** on the map, and the map doesn't zoom to search results.
+- **The selected area isn't highlighted** on the map, and map search results don't zoom (only drill-down and arriving from the home page do).
 - **Map search can't tell an outage from no results.**
-- **Unused files and dependencies:** see [section 3](#3-structure). `lucide-react` is unused, and `@types/leaflet` is in `dependencies` rather than `devDependencies`.
+- **Unused code and dependencies:** `lucide-react` is unused, `@types/leaflet` is in `dependencies` rather than `devDependencies`, `StateRecord.row`/`col` are never sent, and `/about` imports `Link` without using it.
 - **Duplicated values:** `lib/nri.ts` repeats the backend's NRI hazard mapping, and the "top 20%" and "11 of 18" text repeats backend constants. Update them if those change.
 
 ## 8. Guidance for coding agents
@@ -315,7 +342,8 @@ There's no retry button anywhere: reload the page.
 - Call the backend only through `lib/api.ts`, keep colours in `lib/riskColors.ts`, and keep loss caveats in `lib/nri.ts`.
 - Don't hardcode scores, losses, statuses or "live" labels. The site previously showed fake live indicators and sample values, which matters on a safety site.
 - Keep risk scores and FEMA loss estimates visibly separate, and keep the "FEMA estimate" and excluded-hazard wording next to every dollar figure.
-- `/about` makes public claims about the data. If you change sources or scoring, update it.
+- `/about` makes public claims about the data, including `ScoreExplainer`'s formula. If you change sources or scoring, update it.
+- To move the map, set `focus` in `app/map/page.tsx`. Don't call Leaflet's `fitBounds` with raw `getBounds()`, which breaks for Alaska.
 - To check the contract, write a real API response into a `.ts` file as `const x: CountyRecord = {...}` and run `tsc` on it.
 - Add any decision a human might want to change to [`human-review.md`](human-review.md).
 - Update this doc when you change types, routes or data flow.

@@ -5,12 +5,10 @@ next-env.d.ts
 .vercel
 npm-debug.log*
 
-# Secrets
-.env
-**/.env
-
-# Cached Information
-__pycache__/
-# Python bytecode
+# Python
 __pycache__/
 *.pyc
+.venv/
+
+# Env files
+.env
