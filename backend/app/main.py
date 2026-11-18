@@ -15,6 +15,7 @@ from app.clients.open_meteo import OpenMeteoClient
 from app.clients.usgs import UsgsClient
 from app.config import get_settings
 from app.core.cache import TTLCache
+from app.db import connect, initialize
 from app.routers import counties, health, map_values, search, states
 from app.services.reference import ReferenceData
 from app.services.risk import RiskService
@@ -27,8 +28,33 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Set up shared services at startup and close them at shutdown.
+
+    Initializes the database if needed, loads the reference data, creates the HTTP
+    client, cache and services, and starts warming the national snapshot.
+
+    Args:
+        app: The FastAPI app. Services are stored on app.state.
+    Yields:
+        Control to FastAPI while the app serves requests.
+    Called by: FastAPI, as the lifespan passed in create_app.
+    """
     settings = get_settings()
-    reference = ReferenceData(settings.reference_data_path)
+    # Creates tables and seeds them only on first run, then reads ~22k small rows once.
+    def load_reference() -> ReferenceData:
+        """Initialize the database if needed and read the reference data.
+
+        Runs in a worker thread because psycopg's sync API blocks.
+
+        Returns:
+            The loaded ReferenceData.
+        Called by: lifespan.
+        """
+        with connect(settings) as conn:
+            initialize(conn, settings.reference_data_path)
+            return ReferenceData.from_database(conn)
+
+    reference = await asyncio.to_thread(load_reference)
     cache = TTLCache(settings.max_stale_seconds, settings.failure_cooldown_seconds)
 
     async with httpx.AsyncClient(
@@ -55,6 +81,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    """Build the FastAPI app with CORS and every router under /api.
+
+    Returns:
+        The configured app.
+    Called by: this module, to create `app`, which uvicorn serves.
+    """
     settings = get_settings()
     app = FastAPI(
         title="Risk Resource API",

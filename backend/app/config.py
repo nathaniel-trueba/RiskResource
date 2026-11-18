@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     user_agent: str = "UCSD-Risk-Resource-NotForProfit"
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     upstream_timeout_seconds: float = 15.0
+    # Postgres connection string for Supabase's session pooler. See env.example.
+    database_url: str | None = None
+    # Snapshot that seeds an empty database. Rebuilt by scripts/init_db.py --refresh.
     reference_data_path: Path = BACKEND_DIR / "data" / "reference.json"
 
     # Cache lifetimes
@@ -33,4 +36,10 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """Return the app settings, read once from the environment and backend/.env.
+
+    Returns:
+        The cached Settings instance.
+    Called by: general utility, used at startup (main.py) and by the scripts.
+    """
     return Settings()

@@ -20,10 +20,23 @@ class Quake:
 
 class UsgsClient:
     def __init__(self, http: httpx.AsyncClient) -> None:
+        """Wrap the shared HTTP client.
+
+        Args:
+            http: The app-wide httpx client.
+        Called by: main.lifespan at startup.
+        """
         self._http = http
 
     async def fetch_recent_quakes(self) -> list[Quake]:
-        """Return worldwide M3+ earthquakes from the last week."""
+        """Return worldwide M3+ earthquakes from the last week.
+
+        Returns:
+            One Quake per event. Distance filtering to counties happens later.
+        Raises:
+            httpx.HTTPError: On a failed request.
+        Called by: RiskService._build_snapshot, through the TTL cache.
+        """
         start = datetime.now(UTC) - timedelta(days=RECENT_DAYS)
         response = await self._http.get(
             QUERY_URL,
@@ -39,6 +52,14 @@ class UsgsClient:
 
 
 def _parse_quake(feature: dict) -> Quake:
+    """Convert one earthquake GeoJSON feature into a Quake.
+
+    Args:
+        feature: One item of the response's "features" list.
+    Returns:
+        The Quake's magnitude, place description and coordinates.
+    Called by: UsgsClient.fetch_recent_quakes.
+    """
     longitude, latitude, *_ = feature["geometry"]["coordinates"]
     properties = feature["properties"]
     return Quake(

@@ -19,6 +19,17 @@ async def get_county(
     fips: Annotated[str, Path(description="Five-digit county FIPS", pattern=r"^\d{5}$")],
     risk: Annotated[RiskService, Depends(get_risk_service)],
 ) -> CountyRecord:
+    """Return risk details for one county.
+    \f
+    Args:
+        fips: Five-digit county FIPS code.
+        risk: Injected RiskService.
+    Returns:
+        The county's CountyRecord.
+    Raises:
+        HTTPException: 404 for an unknown FIPS code.
+    Called by: HTTP GET /api/counties/{fips}.
+    """
     record = await risk.get_county(fips)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Unknown county FIPS: {fips}")

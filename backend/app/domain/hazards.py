@@ -17,6 +17,12 @@ class Hazard(StrEnum):
 
     @property
     def label(self) -> str:
+        """Return the hazard's display name, e.g. "Severe Storm".
+
+        Returns:
+            The human-readable label.
+        Called by: general utility, wherever a hazard is shown or seeded.
+        """
         return _LABELS[self]
 
 
@@ -49,6 +55,34 @@ FEMA_INCIDENT_HAZARDS = {
     "Tropical Storm": Hazard.HURRICANE,
     "Tropical Depression": Hazard.HURRICANE,
     "Tornado": Hazard.TORNADO,
+}
+
+# FEMA National Risk Index hazard code to hazard, for expected annual loss. Used only
+# by scripts/build_reference_data.py. NRI models 18 hazards; these 11 match ours.
+NRI_HAZARDS = {
+    "WFIR": Hazard.WILDFIRE,
+    "ERQK": Hazard.EARTHQUAKE,
+    "IFLD": Hazard.FLOOD,  # Inland flooding
+    "CFLD": Hazard.FLOOD,  # Coastal flooding
+    "SWND": Hazard.SEVERE_STORM,  # Strong wind
+    "HAIL": Hazard.SEVERE_STORM,
+    "LTNG": Hazard.SEVERE_STORM,  # Lightning
+    "ISTM": Hazard.SEVERE_STORM,  # Ice storm
+    "WNTW": Hazard.SEVERE_STORM,  # Winter weather
+    "HRCN": Hazard.HURRICANE,
+    "TRND": Hazard.TORNADO,
+}
+
+# NRI hazards with no matching hazard here. Their losses are left out of every
+# expected loss figure, and the frontend lists them so users know.
+NRI_EXCLUDED_HAZARDS = {
+    "AVLN": "Avalanche",
+    "CWAV": "Cold wave",
+    "DRGT": "Drought",
+    "HWAV": "Heat wave",
+    "LNDS": "Landslide",
+    "TSUN": "Tsunami",
+    "VLCN": "Volcanic activity",
 }
 
 # NWS alert `event` to (hazard, live score from 0 to 100). Other events, such as

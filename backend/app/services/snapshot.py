@@ -39,12 +39,28 @@ class Snapshot:
 
 
 def alert_importance(alert: Alert) -> tuple[int, int]:
+    """Sort key ranking alerts by their live score, then NWS severity.
+
+    Args:
+        alert: The alert.
+    Returns:
+        (score from ALERT_RULES or 0, severity rank). Higher is more important.
+    Called by: _apply_alerts, risk._state_primary_alert.
+    """
     rule = ALERT_RULES.get(alert.event)
     return (rule[1] if rule else 0, _SEVERITY_RANK.get(alert.severity, 0))
 
 
 def merge_signal(signals: dict[Hazard, LiveSignal], signal: LiveSignal) -> None:
-    """Keep the stronger signal for a hazard. On a tie, the existing one stays."""
+    """Keep the stronger signal for a hazard. On a tie, the existing one stays.
+
+    Args:
+        signals: One area's strongest signal per hazard. Updated in place.
+        signal: The new signal.
+    Returns:
+        None.
+    Called by: _apply_alerts, _apply_quakes, RiskService.get_county.
+    """
     current = signals.get(signal.hazard)
     if current is None or signal.score > current.score:
         signals[signal.hazard] = signal
@@ -53,7 +69,16 @@ def merge_signal(signals: dict[Hazard, LiveSignal], signal: LiveSignal) -> None:
 def build_snapshot(
     reference: ReferenceData, alerts: list[Alert] | None, quakes: list[Quake] | None
 ) -> Snapshot:
-    """Compute scores. `None` for a feed means that source is unavailable."""
+    """Compute every county and state score from the baseline and national feeds.
+
+    Args:
+        reference: Static county and state data.
+        alerts: Active NWS alerts, or None if the feed is unavailable.
+        quakes: Recent USGS earthquakes, or None if the feed is unavailable.
+    Returns:
+        The Snapshot.
+    Called by: RiskService._build_snapshot.
+    """
     signals: dict[str, dict[Hazard, LiveSignal]] = {fips: {} for fips in reference.counties}
     alerts_by_county = _apply_alerts(reference, alerts or [], signals)
     _apply_quakes(reference, quakes or [], signals)
@@ -88,6 +113,16 @@ def _apply_alerts(
     alerts: list[Alert],
     signals: dict[str, dict[Hazard, LiveSignal]],
 ) -> dict[str, list[Alert]]:
+    """Attach alerts to their counties and record each one's live signal.
+
+    Args:
+        reference: Static data, to skip codes that aren't counties (e.g. marine zones).
+        alerts: Active alerts.
+        signals: Strongest signal per county and hazard. Updated in place.
+    Returns:
+        Alerts by county FIPS, most important first.
+    Called by: build_snapshot.
+    """
     by_county: dict[str, list[Alert]] = {}
     for alert in alerts:
         signal = alert_signal(alert.event)
@@ -107,6 +142,16 @@ def _apply_quakes(
     quakes: list[Quake],
     signals: dict[str, dict[Hazard, LiveSignal]],
 ) -> None:
+    """Record a live earthquake signal for each county near a recent quake.
+
+    Args:
+        reference: Static data, for county bounding boxes.
+        quakes: Recent earthquakes.
+        signals: Strongest signal per county and hazard. Updated in place.
+    Returns:
+        None.
+    Called by: build_snapshot.
+    """
     fips_list = list(reference.counties)
     boxes = np.array([reference.counties[f].bbox for f in fips_list])
 
@@ -124,6 +169,18 @@ def _population_weighted(
     county_fips: tuple[str, ...],
     county_scores: dict[str, dict[Hazard, int]],
 ) -> dict[Hazard, int]:
+    """Average county hazard scores into state scores, weighted by population.
+
+    Where population is unknown (Puerto Rico), counties are weighted equally.
+
+    Args:
+        reference: Static data, for county populations.
+        county_fips: The state's counties.
+        county_scores: Score per county and hazard.
+    Returns:
+        The state's score per hazard.
+    Called by: build_snapshot.
+    """
     # Where population is unknown (Puerto Rico), counties are weighted equally.
     weights = [reference.counties[f].population or 1 for f in county_fips]
     total = sum(weights)

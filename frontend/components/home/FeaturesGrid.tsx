@@ -22,7 +22,7 @@ export default function FeaturesGrid() {
             <span className="text-xl mb-3 block">🗺️</span>
             <h3 className="text-sm font-bold text-[#2A1F16]">Explore the risk map</h3>
             <p className="text-xs text-[#6B5B4B] mt-2 leading-relaxed">
-              Switch between states and counties and color the map by risk score, loss per person, social vulnerability or community resilience.
+              Switch between states and counties and color the map by risk score, FEMA&apos;s expected loss per person or in total, or the share of residents in high-loss counties.
             </p>
           </div>
           <Link href="/map" className={link}>Open the map →</Link>
@@ -60,7 +60,7 @@ export default function FeaturesGrid() {
             <span className="text-xl mb-3 block">🗄️</span>
             <h3 className="text-sm font-bold text-[#2A1F16]">Built on public data</h3>
             <p className="text-xs text-[#6B5B4B] mt-2 leading-relaxed">
-              Scores and loss estimates come from FEMA&apos;s National Risk Index, with every source listed.
+              Loss estimates come from FEMA&apos;s National Risk Index. Scores combine FEMA disaster declarations, USGS earthquakes and live NWS alerts.
             </p>
           </div>
           <Link href="/about" className={link}>How the data works →</Link>
