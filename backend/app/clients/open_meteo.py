@@ -30,9 +30,27 @@ class Place:
 
 class OpenMeteoClient:
     def __init__(self, http: httpx.AsyncClient) -> None:
+        """Wrap the shared HTTP client.
+
+        Args:
+            http: The app-wide httpx client.
+        Called by: main.lifespan at startup.
+        """
         self._http = http
 
     async def fetch_conditions(self, latitude: float, longitude: float) -> Conditions:
+        """Fetch the next 24 hours of forecast at a point and summarize it.
+
+        Args:
+            latitude: Point latitude, usually a county centroid.
+            longitude: Point longitude.
+        Returns:
+            The forecast summary used for wildfire, wind and flood scoring.
+        Raises:
+            httpx.HTTPError: On a failed request.
+            ValueError: If the forecast has no complete hours.
+        Called by: RiskService._conditions_for, through the TTL cache.
+        """
         response = await self._http.get(
             FORECAST_URL,
             params={
@@ -48,7 +66,16 @@ class OpenMeteoClient:
         return _summarize(response.json()["hourly"])
 
     async def search_places(self, query: str) -> list[Place]:
-        """Find US places by name or ZIP code."""
+        """Find US places by name or ZIP code.
+
+        Args:
+            query: Free text, such as "Palm Springs" or "92262".
+        Returns:
+            Up to 10 places that have both a state and a county.
+        Raises:
+            httpx.HTTPError: On a failed request.
+        Called by: SearchService._match_places, through the TTL cache.
+        """
         response = await self._http.get(
             GEOCODING_URL,
             params={
@@ -68,6 +95,18 @@ class OpenMeteoClient:
 
 
 def _summarize(hourly: dict) -> Conditions:
+    """Reduce hourly forecast arrays to a Conditions summary.
+
+    Hours where Open-Meteo returned null for gusts or humidity are skipped.
+
+    Args:
+        hourly: The response's "hourly" object of parallel arrays.
+    Returns:
+        Max gust, min humidity, total rain, and whether any hour met both fire limits.
+    Raises:
+        ValueError: If no hour is complete.
+    Called by: OpenMeteoClient.fetch_conditions.
+    """
     # Open-Meteo can return null for individual hours, so keep complete hours only.
     hours = [
         (gust, rh, rain or 0.0)

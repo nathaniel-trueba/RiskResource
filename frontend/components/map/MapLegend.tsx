@@ -1,48 +1,34 @@
-// frontend/components/map/MapLegend.tsx
-'use client';
-
 import React from 'react';
-import { MetricOption } from '@/lib/types';
-import { RATINGS, NO_DATA } from '@/lib/mockRiskData';
+import { Band, NO_DATA_COLOR } from '@/lib/riskColors';
 
 interface Props {
-  metric: MetricOption;
-  breaks: number[];
+  title: string;     // What the colours show, e.g. "Risk score (0–100)"
+  bands: Band[];     // Lowest first
+  note?: string;     // Short caveat under the bands
 }
 
-export default function MapLegend({ metric, breaks }: Props) {
-  let rows: [string, string][] = [];
-
-  if (metric.categorical) {
-    rows = RATINGS.filter((r) => r.label !== 'No Rating').map((r) => [r.color, r.label]);
-  } else if (metric.palette && breaks.length > 0 && metric.fmt) {
-    const fmt = metric.fmt;
-    const palette = metric.palette;
-    rows = palette
-      .map((c, i): [string, string] => {
-        if (i === 0) return [c, `≤ ${fmt(breaks[0])}`];
-        if (i === palette.length - 1) return [c, `> ${fmt(breaks[breaks.length - 1])}`];
-        return [c, `${fmt(breaks[i - 1])} – ${fmt(breaks[i])}`];
-      })
-      .reverse();
-  }
-
-  rows.push([NO_DATA, 'No data']);
+export default function MapLegend({ title, bands, note }: Props) {
+  // Highest band first, as on a typical choropleth legend
+  const ordered = [...bands].reverse();
 
   return (
-    <div className="absolute bottom-4 left-4 z-[400] bg-white p-3 rounded-xl shadow-md border border-[#e2e0db] text-xs min-w-[160px] leading-relaxed">
-      <div className="font-semibold text-[#1d232b] mb-1.5">{metric.label}</div>
-      <div className="space-y-1">
-        {rows.map(([color, text], idx) => (
-          <div key={idx} className="flex items-center gap-2 text-[#1d232b]">
-            <i
-              className="w-3.5 h-3.5 rounded-xs shrink-0 inline-block"
-              style={{ backgroundColor: color }}
-            />
-            <span>{text}</span>
+    <div className="absolute bottom-4 left-4 z-[500] bg-white/95 backdrop-blur-xs p-3 rounded-xl border border-gray-200/90 shadow-sm text-xs w-52">
+      <span className="font-mono text-[10px] uppercase text-gray-500 font-bold block mb-2 leading-snug">
+        {title}
+      </span>
+      <div className="space-y-1.5">
+        {ordered.map((band) => (
+          <div key={band.label} className="flex items-center gap-2">
+            <span className="w-3.5 h-3.5 rounded-sm shrink-0" style={{ backgroundColor: band.color }} />
+            <span className="text-gray-700 font-mono text-[11px]">{band.label}</span>
           </div>
         ))}
+        <div className="flex items-center gap-2">
+          <span className="w-3.5 h-3.5 rounded-sm shrink-0" style={{ backgroundColor: NO_DATA_COLOR }} />
+          <span className="text-gray-500 font-mono text-[11px]">No data</span>
+        </div>
       </div>
+      {note && <p className="mt-2 text-[10px] text-gray-500 leading-snug">{note}</p>}
     </div>
   );
 }

@@ -1,206 +1,222 @@
 // frontend/components/map/RiskLeafletMap.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import * as topojson from 'topojson-client';
+import type { Feature, FeatureCollection, Position } from 'geojson';
 import 'leaflet/dist/leaflet.css';
-import { MapViewMode, MetricOption, RiskDataPayload } from '@/lib/types';
-import { BOUNDARIES_URL, STATE_FIPS_ON_MAP, RATINGS, NO_DATA } from '@/lib/mockRiskData';
-import MapLegend from './MapLegend';
+import { MapValue } from '@/lib/types';
+
+const DEFAULT_CENTER: [number, number] = [45.0, -100.0];
+const DEFAULT_ZOOM = 3.5;
+
+/** An area to zoom to: a state by postal code ("CA") or a county by FIPS ("06065"). */
+export interface MapFocus {
+  type: 'state' | 'county';
+  id: string;
+}
+
+// How far in each kind of focus may zoom, so a small county still shows its region.
+const FOCUS_MAX_ZOOM = { state: 7, county: 8 };
+
+/**
+ * A feature's bounding box. Longitudes east of 0° are shifted west by 360°, because
+ * every US area is in the western hemisphere except Alaska's Aleutian Islands, which
+ * cross the 180° line. Without the shift Alaska's box spans the whole globe.
+ */
+function boundsOf(feature: Feature): L.LatLngBounds {
+  const bounds = L.latLngBounds([]);
+  const visit = (coords: unknown): void => {
+    if (typeof (coords as Position)[0] === 'number') {
+      const [lng, lat] = coords as Position;
+      bounds.extend([lat, lng > 0 ? lng - 360 : lng]);
+    } else {
+      (coords as unknown[]).forEach(visit);
+    }
+  };
+  if (feature.geometry && 'coordinates' in feature.geometry) visit(feature.geometry.coordinates);
+  return bounds;
+}
+
+// Flies the map to `focus` when it's set, and back to the national view when it's
+// cleared. Renders nothing; it only moves the map.
+function FocusOn({
+  focus,
+  statesGeo,
+  countiesGeo,
+}: {
+  focus?: MapFocus | null;
+  statesGeo: FeatureCollection | null;
+  countiesGeo: FeatureCollection | null;
+}) {
+  const map = useMap();
+  const focused = useRef(false); // Only fly home after a zoom-in, not on first load
+
+  useEffect(() => {
+    if (!focus) {
+      if (focused.current) map.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 0.8 });
+      focused.current = false;
+      return;
+    }
+    const geo = focus.type === 'state' ? statesGeo : countiesGeo;
+    const feature = geo?.features.find((f) => String(f.id) === focus.id);
+    if (!feature) return; // Boundaries still loading: this runs again once they arrive
+    map.flyToBounds(boundsOf(feature), {
+      padding: [24, 24],
+      maxZoom: FOCUS_MAX_ZOOM[focus.type],
+      duration: 0.8,
+    });
+    focused.current = true;
+  }, [map, focus, statesGeo, countiesGeo]);
+
+  return null;
+}
 
 interface Props {
-  viewMode: MapViewMode;
-  metric: MetricOption;
-  data: RiskDataPayload;
-  selectedId: string | null;
-  onSelectFeature: (id: string, fallbackName: string) => void;
-}
-
-function quantileBreaks(values: (number | null | undefined)[], n = 5): number[] {
-  const v = values
-    .filter((x): x is number => x != null && !Number.isNaN(x))
-    .sort((a, b) => a - b);
-  if (!v.length) return [];
-  const out: number[] = [];
-  for (let i = 1; i < n; i++) {
-    out.push(v[Math.floor((i / n) * (v.length - 1))]);
-  }
-  return out;
-}
-
-// Helper component inside MapContainer to handle fitBounds when a feature is clicked
-function ZoomToBounds({ bounds, viewMode }: { bounds: L.LatLngBoundsExpression | null; viewMode: MapViewMode }) {
-  const map = useMap();
-  useEffect(() => {
-    if (bounds) {
-      map.fitBounds(bounds, {
-        maxZoom: viewMode === 'states' ? 6 : 8,
-        padding: [20, 20],
-      });
-    }
-  }, [bounds, viewMode, map]);
-  return null;
+  viewMode: 'states' | 'counties';
+  // Values for the current view, keyed by state code or county FIPS. Undefined while loading.
+  values?: Record<string, MapValue>;
+  // Identifies what `values` holds, e.g. "county:lossPerPerson:flood". The map
+  // redraws when it changes.
+  valuesKey: string;
+  // Fill colour for an area's value (undefined: no data)
+  colorFor: (value: number | undefined) => string;
+  // Tooltip line for an area's value, e.g. "Loss per person: $447/yr"
+  describe: (value: MapValue) => string;
+  // id is the state's postal code (e.g. "CA") or the county's FIPS code (e.g. "06065")
+  onSelectFeature?: (id: string, type: 'state' | 'county') => void;
+  // State or county to zoom to. Null or undefined: national view.
+  focus?: MapFocus | null;
 }
 
 export default function RiskLeafletMap({
   viewMode,
-  metric,
-  data,
-  selectedId,
+  values,
+  valuesKey,
+  colorFor,
+  describe,
   onSelectFeature,
+  focus,
 }: Props) {
-  const [shapes, setShapes] = useState<{ states: any; counties: any } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [targetBounds, setTargetBounds] = useState<L.LatLngBoundsExpression | null>(null);
+  const [statesGeo, setStatesGeo] = useState<FeatureCollection | null>(null);
+  const [countiesGeo, setCountiesGeo] = useState<FeatureCollection | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Read CARTO API key from Next.js environment variable
+  const cartoApiKey = process.env.NEXT_PUBLIC_CARTO_API_KEY;
+
+  // If key is present in env, use CARTO Positron; otherwise fallback gracefully to OpenStreetMap
+  const tileUrl = cartoApiKey
+    ? `https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?key=${cartoApiKey}`
+    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  const tileAttribution = cartoApiKey
+    ? '&copy; <a href="https://carto.com/">CARTO</a>'
+    : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
   useEffect(() => {
-    async function loadBoundaries() {
-      try {
-        const res = await fetch(BOUNDARIES_URL);
-        if (!res.ok) throw new Error(`Boundary file returned ${res.status}`);
-        const topo = await res.json();
+    // 1. Fetch US States GeoJSON (feature ids are postal codes)
+    const fetchStates = fetch(
+      'https://raw.githubusercontent.com/python-visualization/folium-example-data/main/us_states.json'
+    ).then((res) => res.json());
 
-        const states: any = topojson.feature(topo, topo.objects.states);
-        const counties: any = topojson.feature(topo, topo.objects.counties);
+    // 2. Fetch US Counties GeoJSON (feature ids are FIPS codes)
+    const fetchCounties = fetch(
+      'https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json'
+    ).then((res) => res.json());
 
-        states.features = states.features.filter((f: any) =>
-          STATE_FIPS_ON_MAP.has(String(f.id).padStart(2, '0'))
-        );
-        counties.features = counties.features.filter((f: any) =>
-          STATE_FIPS_ON_MAP.has(String(f.id).padStart(5, '0').slice(0, 2))
-        );
-
-        setShapes({ states, counties });
+    Promise.all([fetchStates, fetchCounties])
+      .then(([statesData, countiesData]) => {
+        setStatesGeo(statesData);
+        setCountiesGeo(countiesData);
         setLoading(false);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'Failed to load map boundaries');
-        setLoading(false);
-      }
-    }
-    loadBoundaries();
+      })
+      .catch((err) => console.error('Error fetching map boundaries:', err));
   }, []);
 
-  const recordFor = (feature: any) => {
-    const rawId = String(feature.id);
-    const id = viewMode === 'states' ? rawId.padStart(2, '0') : rawId.padStart(5, '0');
-    return (data[viewMode] as Record<string, any>)[id];
+  const tooltip = (name: string, id: string) => {
+    const value = values?.[id];
+    const line = !values ? 'Loading...' : value ? describe(value) : 'No data';
+    return `<b>${name}</b><br/>${line}`;
   };
 
-  const activeFeatures = shapes ? shapes[viewMode].features : [];
-  const activeRecords = activeFeatures.map(recordFor).filter(Boolean);
-  const breaks = metric.categorical
-    ? []
-    : quantileBreaks(activeRecords.map((r: any) => r[metric.key]));
-
-  const colorFor = (record: any): string => {
-    if (!record) return NO_DATA;
-    const v = record[metric.key];
-    if (metric.categorical) {
-      return (RATINGS.find((r) => r.label === v) || { color: NO_DATA }).color;
-    }
-    if (v == null || !metric.palette) return NO_DATA;
-    let i = 0;
-    while (i < breaks.length && v > breaks[i]) i++;
-    return metric.palette[i];
-  };
-
-  const baseStyle = (feature: any) => {
-    const rawId = String(feature.id);
-    const id = viewMode === 'states' ? rawId.padStart(2, '0') : rawId.padStart(5, '0');
-    const isSelected = selectedId === id;
-    return {
-      fillColor: colorFor(recordFor(feature)),
-      fillOpacity: 0.85,
-      color: isSelected ? '#1d232b' : '#ffffff',
-      weight: isSelected ? 2.5 : viewMode === 'states' ? 1 : 0.3,
-    };
-  };
-
-  const tooltipHtml = (feature: any) => {
-    const r = recordFor(feature);
-    if (!r) return `<b>${feature.properties?.name || `FIPS ${feature.id}`}</b><br/>No FEMA data for this area`;
-    const name = viewMode === 'counties' ? `${r.name}, ${r.state}` : r.name;
-    const v = r[metric.key];
-    const shown = v == null ? 'No data' : metric.categorical ? v : metric.fmt ? metric.fmt(v) : v;
-    return `<b>${name}</b><br/>${metric.label}: ${shown}`;
-  };
+  // GeoJSON layers only read `style` and `onEachFeature` when they mount, so the
+  // key changes whenever new values arrive to redraw them with the new colours.
+  const layerKey = values ? valuesKey : `${valuesKey}-loading`;
 
   return (
-    <div className="relative w-full h-[620px] rounded-xl overflow-hidden border border-[#e2e0db] bg-[#dfe6ea]">
+    <div className="relative w-full h-[620px] rounded-2xl overflow-hidden border border-gray-200/90 shadow-sm bg-[#e8ecef]">
+      {/* Loading Overlay */}
       {loading && (
-        <div className="absolute inset-0 z-[1000] grid place-items-center bg-[#f6f5f2]/85 text-sm text-[#5f6b78]">
-          Loading map…
-        </div>
-      )}
-      {error && (
-        <div className="absolute inset-0 z-[1000] grid place-items-center bg-[#f6f5f2]/90 text-sm text-[#b8321f]">
-          Couldn&apos;t load the map: {error}
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/75 backdrop-blur-xs">
+          <div className="w-8 h-8 border-3 border-gray-400 border-t-black rounded-full animate-spin mb-2" />
+          <span className="font-mono text-xs text-gray-700">Loading North America Geographic Boundary Layers...</span>
         </div>
       )}
 
+      {/* Map Centered over North America */}
       <MapContainer
-        bounds={[
-          [24.5, -125],
-          [49.5, -66.5],
-        ]}
-        preferCanvas={true}
-        zoomSnap={0.25}
+        center={DEFAULT_CENTER}
+        zoom={DEFAULT_ZOOM}
         minZoom={3}
+        maxZoom={9}
         scrollWheelZoom={true}
         className="w-full h-full z-0"
       >
-        <TileLayer
-          maxZoom={16}
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-          attribution="Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
-        />
+        <TileLayer attribution={tileAttribution} url={tileUrl} />
+        <FocusOn focus={focus} statesGeo={statesGeo} countiesGeo={countiesGeo} />
 
-        <ZoomToBounds bounds={targetBounds} viewMode={viewMode} />
-
-        {shapes && (
+        {/* States Overview Mode */}
+        {viewMode === 'states' && statesGeo && (
           <GeoJSON
-            key={`${viewMode}-${metric.key}-${selectedId || 'none'}`}
-            data={shapes[viewMode]}
-            style={baseStyle}
-            onEachFeature={(feature, layer: any) => {
-              layer.bindTooltip(() => tooltipHtml(feature), {
-                sticky: true,
-                className: 'risk-tip',
-              });
+            key={`states-${layerKey}`}
+            data={statesGeo}
+            style={(feature) => ({
+              fillColor: colorFor(values?.[String(feature?.id)]?.value),
+              weight: 1.2,
+              opacity: 1,
+              color: '#2d3748',
+              fillOpacity: 0.7,
+            })}
+            onEachFeature={(feature, layer) => {
+              const id = String(feature.id ?? '');
+              const stateName = feature.properties?.name || 'Unknown State';
+              layer.bindTooltip(tooltip(stateName, id), { sticky: true });
               layer.on({
-                mouseover: (e: any) =>
-                  e.target.setStyle({
-                    weight: viewMode === 'states' ? 2.5 : 1.5,
-                    color: '#1d232b',
-                  }),
-                mouseout: (e: any) => e.target.setStyle(baseStyle(feature)),
-                click: (e: any) => {
-                  const rawId = String(feature.id);
-                  const id = viewMode === 'states' ? rawId.padStart(2, '0') : rawId.padStart(5, '0');
-                  setTargetBounds(e.target.getBounds());
-                  onSelectFeature(id, feature.properties?.name || `Area ${id}`);
-                },
+                click: () => id && onSelectFeature?.(id, 'state'),
+                mouseover: (e) => e.target.setStyle({ weight: 2.2, color: '#000000', fillOpacity: 0.9 }),
+                mouseout: (e) => e.target.setStyle({ weight: 1.2, color: '#2d3748', fillOpacity: 0.7 }),
               });
             }}
           />
         )}
 
-        {/* Keep white state borders visible on top when viewing counties */}
-        {shapes && viewMode === 'counties' && (
+        {/* Counties Detailed Mode */}
+        {viewMode === 'counties' && countiesGeo && (
           <GeoJSON
-            key="state-borders-overlay"
-            data={shapes.states}
-            style={{ fill: false, color: '#ffffff', weight: 1.2 }}
-            interactive={false}
+            key={`counties-${layerKey}`}
+            data={countiesGeo}
+            style={(feature) => ({
+              fillColor: colorFor(values?.[String(feature?.id)]?.value),
+              weight: 0.35,
+              opacity: 0.8,
+              color: '#4a5568',
+              fillOpacity: 0.65,
+            })}
+            onEachFeature={(feature, layer) => {
+              const id = String(feature.id ?? '');
+              const countyName = feature.properties?.NAME || `County ${id}`;
+              layer.bindTooltip(tooltip(countyName, id), { sticky: true });
+              layer.on({
+                click: () => id && onSelectFeature?.(id, 'county'),
+                mouseover: (e) => e.target.setStyle({ weight: 1.5, color: '#000000', fillOpacity: 0.9 }),
+                mouseout: (e) => e.target.setStyle({ weight: 0.35, color: '#4a5568', fillOpacity: 0.65 }),
+              });
+            }}
           />
         )}
       </MapContainer>
-
-      <MapLegend metric={metric} breaks={breaks} />
     </div>
   );
 }

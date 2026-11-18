@@ -19,6 +19,17 @@ async def get_state(
     code: Annotated[str, Path(description="Two-letter state code", min_length=2, max_length=2)],
     risk: Annotated[RiskService, Depends(get_risk_service)],
 ) -> StateRecord:
+    """Return risk details for one state.
+    \f
+    Args:
+        code: Two-letter state code, in any case.
+        risk: Injected RiskService.
+    Returns:
+        The state's StateRecord.
+    Raises:
+        HTTPException: 404 for an unknown state code.
+    Called by: HTTP GET /api/states/{code}.
+    """
     record = await risk.get_state(code.upper())
     if record is None:
         raise HTTPException(status_code=404, detail=f"Unknown state code: {code}")
