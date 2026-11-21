@@ -1,0 +1,14 @@
+# Extra packages for the wildfire model (ml/wildfire/). Install on top of
+# requirements.txt:  pip install -r requirements.txt -r requirements-ml.txt
+xgboost==3.4.1
+scikit-learn==1.9.1
+scipy==1.18.1
+pandas==3.1.1
+pyarrow==26.0.1
+shapely==2.2.0
+
+# Only for running the notebooks in ml/wildfire/notebooks/
+matplotlib==3.11.2
+ipykernel==7.4.0
+nbformat==5.11.1
+nbconvert==7.17.2

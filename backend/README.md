@@ -114,6 +114,8 @@ backend/
 │   └── core/cache.py      In-memory TTL cache that serves recent data during outages
 ├── db/schema.sql          The whole database schema (safe to re-run)
 ├── data/reference.json    Committed snapshot of the reference data, used to seed the DB
+├── ml/wildfire/           XGBoost weekly wildfire ignition model (see its README.md).
+│                          Extra packages: requirements-ml.txt. Not wired into the API yet.
 └── scripts/
     ├── init_db.py             CLI: initialize, reseed or refresh the database
     └── build_reference_data.py  Computes the reference data from FEMA, USGS and Census
