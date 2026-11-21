@@ -20,8 +20,8 @@ const RiskLeafletMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-[580px] bg-gray-100/80 animate-pulse rounded-2xl flex items-center justify-center border border-gray-200">
-        <span className="text-xs font-mono text-gray-500">Initializing GIS Map...</span>
+      <div className="w-full h-[580px] bg-gray-100/80 dark:bg-[#181613] animate-pulse rounded-2xl flex items-center justify-center border border-gray-200 dark:border-white/10">
+        <span className="text-xs font-mono text-gray-500 dark:text-gray-400">Initializing GIS Map...</span>
       </div>
     ),
   }
@@ -117,15 +117,28 @@ export default function RiskMapPage() {
     [finishRequest]
   );
 
-  // First load: a county from the URL (?fips=06065 or ?q=Palm Springs, CA, as the
-  // home page links), zoomed in, otherwise the default state.
+  // First load: a county/address from the URL (?fips=06065&lat=...&lng=... or ?q=...),
+  // zoomed in, otherwise the default state.
   useEffect(() => {
     const request = ++latestRequest.current;
     const params = new URLSearchParams(window.location.search);
     const fips = params.get('fips');
+    const lat = params.get('lat');
+    const lng = params.get('lng');
     const query = params.get('q');
+
     if (fips) {
       loadCounty(fips, request, true);
+    } else if (lat && lng) {
+      setViewMode('counties');
+      fetch(`https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lng}&format=json`)
+        .then((r) => r.json())
+        .then((geo) => {
+          const countyFips = geo?.results?.[0]?.county_fips;
+          if (countyFips) loadCounty(countyFips, request, true);
+          else loadState(DEFAULT_STATE_CODE, request);
+        })
+        .catch(() => loadState(DEFAULT_STATE_CODE, request));
     } else if (query) {
       searchCounties(query, 1)
         .then((results) => {
@@ -160,8 +173,12 @@ export default function RiskMapPage() {
 
   // Handle clicking a polygon on the map
   const handleFeatureSelect = (id: string, type: 'state' | 'county') => {
-    if (type === 'county') loadCounty(id, startRequest());
-    else loadState(id, startRequest());
+    if (type === 'county') {
+      loadCounty(id, startRequest());
+    } else {
+      setSelectedCounty(null);
+      loadState(id, startRequest());
+    }
   };
 
   // Called when clicking "View county breakdown": show the county map zoomed to the
@@ -178,6 +195,16 @@ export default function RiskMapPage() {
     setSelectedCounty(null);
     setFocus(null);
   };
+
+  // Clears selection, un-highlights polygon, zooms back out, and empties right panel
+  const handleClearSelection = useCallback(() => {
+    latestRequest.current++;
+    setSelectedState(null);
+    setSelectedCounty(null);
+    setFocus(null);
+    setLoading(false);
+    setError(null);
+  }, []);
 
   // Legend, colours and tooltips for the current measure
   const hazardLabel = HAZARDS.find((h) => h.key === activeHazard)?.label ?? 'All hazards';
@@ -210,7 +237,7 @@ export default function RiskMapPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcfbf7] text-[#111827] flex flex-col justify-between">
+    <div className="min-h-screen bg-[#fcfbf7] text-[#111827] dark:bg-[#11100e] dark:text-[#f3f4f6] flex flex-col justify-between transition-colors duration-200">
       <Navigation />
 
       <main className="max-w-7xl w-full mx-auto px-6 py-8">
@@ -219,7 +246,8 @@ export default function RiskMapPage() {
           onViewModeChange={(mode) => {
             if (mode === 'states') return showAllStates();
             setViewMode(mode);
-            setFocus(null); // The Counties toggle shows the whole country
+            setSelectedCounty(null);
+            setFocus(null);
           }}
           measure={measure}
           onMeasureChange={setMeasure}
@@ -229,7 +257,7 @@ export default function RiskMapPage() {
         />
 
         {mapError && (
-          <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 rounded-xl">
+          <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 dark:text-red-200 dark:bg-red-950/50 dark:border-red-900/60 rounded-xl">
             {mapError}. Is the backend running?
           </p>
         )}
@@ -245,6 +273,12 @@ export default function RiskMapPage() {
               colorFor={(value) => bandColor(value, bands)}
               describe={describe}
               onSelectFeature={handleFeatureSelect}
+              onClearSelection={handleClearSelection}
+              selectedId={
+                viewMode === 'counties'
+                  ? selectedCounty?.fips ?? null
+                  : selectedState?.code ?? null
+              }
               focus={focus}
             />
             <MapLegend title={legend.title} bands={bands} note={legend.note} />
@@ -253,7 +287,7 @@ export default function RiskMapPage() {
           {/* Conditional Sidebar: Shows County details if in county mode, State details otherwise */}
           <div className={`relative ${loading ? 'opacity-60 transition-opacity' : ''}`}>
             {error && (
-              <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 rounded-xl lg:w-88">
+              <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 dark:text-red-200 dark:bg-red-950/50 dark:border-red-900/60 rounded-xl lg:w-88">
                 {error}. Is the backend running?
               </p>
             )}
@@ -268,8 +302,12 @@ export default function RiskMapPage() {
                 onDrillDown={handleDrillDownToCounties}
               />
             ) : (
-              <aside className="w-full lg:w-88 bg-white border border-gray-200/90 rounded-2xl p-6 text-xs font-mono text-gray-500">
-                {error ? 'No data to show.' : 'Loading risk data...'}
+              <aside className="w-full lg:w-88 bg-white border border-gray-200/90 dark:bg-[#181613] dark:border-white/10 rounded-2xl p-6 text-xs text-gray-500 dark:text-gray-400">
+                {error
+                  ? 'No data to show.'
+                  : loading
+                    ? 'Loading risk data...'
+                    : 'Click a state or county on the map to view its details.'}
               </aside>
             )}
           </div>

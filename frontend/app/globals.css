@@ -1,31 +1,50 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
-@source "../components/**/*.{js,ts,jsx,tsx,mdx}";
-@source "../app/**/*.{js,ts,jsx,tsx,mdx}";
-
-@theme inline {
-  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+@keyframes cycleProgress {
+	0% { width: 0%; }
+	100% { width: 100%; }
 }
-
+/* Locks the homepage and default routes to Light Mode regardless of OS settings */
 :root {
-	color-scheme: light;
+  color-scheme: light;
   --background: #fcfbf7;
   --foreground: #111827;
 }
 
-html,
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
   background-color: var(--background);
   color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-@keyframes cycleProgress {
-  0% { width: 0%; }
-  100% { width: 100%; }
+/* Balanced Light Mode Palette (Warm Editorial Cream) */
+.theme-light {
+  color-scheme: light;
+  --bg: #fcfbf7;           /* Main page canvas */
+  --surface: #ffffff;      /* Cards, panels, and controls */
+  --surface-2: #f5f2eb;    /* Subtle badges, hover states, and inputs */
+  --ink: #111827;          /* Primary headings and body text */
+  --muted: #6b7280;        /* Secondary labels and captions */
+  --line: #e5e0d5;         /* Crisp, subtle borders */
+  --accent: #d97706;       /* Warm amber primary accent */
+  --map-stroke: #ffffff;   /* State/county border lines on light map */
+  --map-border: #374151;   /* Outer coastline/border */
+  --shadow: 0 4px 16px rgba(17, 24, 39, 0.06);
+}
+
+/* Balanced Dark Mode Palette (Warm Charcoal — avoids harsh pure black) */
+.theme-dark {
+  color-scheme: dark;
+  --bg: #11100e;           /* Main page canvas */
+  --surface: #181613;      /* Elevated cards and inspector panels */
+  --surface-2: #221f1b;    /* Hover states, pills, and secondary containers */
+  --ink: #f3f4f6;          /* High-contrast off-white text */
+  --muted: #9ca3af;        /* Readable muted gray labels */
+  --line: rgba(255, 255, 255, 0.12); /* Subtle translucent borders */
+  --accent: #e29b4d;       /* Warm gold/amber accent for dark surfaces */
+  --map-stroke: #181613;   /* State/county border lines on dark map */
+  --map-border: #6b7280;   /* Outer coastline/border */
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
