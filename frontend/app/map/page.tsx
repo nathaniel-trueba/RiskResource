@@ -20,8 +20,8 @@ const RiskLeafletMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-[580px] bg-gray-100/80 animate-pulse rounded-2xl flex items-center justify-center border border-gray-200">
-        <span className="text-xs font-mono text-gray-500">Initializing GIS Map...</span>
+      <div className="w-full h-[580px] bg-gray-100/80 dark:bg-[#181613] animate-pulse rounded-2xl flex items-center justify-center border border-gray-200 dark:border-white/10">
+        <span className="text-xs font-mono text-gray-500 dark:text-gray-400">Initializing GIS Map...</span>
       </div>
     ),
   }
@@ -49,6 +49,7 @@ export default function RiskMapPage() {
   // Area the map is zoomed to: a state after "View county breakdown", or a county
   // opened from a homepage search. Null: national view.
   const [focus, setFocus] = useState<MapFocus | null>(null);
+  const [pinLocation, setPinLocation] = useState<{ lat: number; lng: number; name?: string } | null>(null);
   const [loading, setLoading] = useState(true); // The first area loads on mount
   const [error, setError] = useState<string | null>(null);
 
@@ -117,15 +118,38 @@ export default function RiskMapPage() {
     [finishRequest]
   );
 
-  // First load: a county from the URL (?fips=06065 or ?q=Palm Springs, CA, as the
-  // home page links), zoomed in, otherwise the default state.
+  // First load: a county/address from the URL (?fips=06065&lat=...&lng=... or ?q=...),
+  // zoomed in, otherwise the default state.
   useEffect(() => {
     const request = ++latestRequest.current;
     const params = new URLSearchParams(window.location.search);
     const fips = params.get('fips');
+    const lat = params.get('lat');
+    const lng = params.get('lng');
+    const name = params.get('name');
     const query = params.get('q');
+
+    const hasPin = Boolean(lat && lng);
+    if (hasPin) {
+      setPinLocation({
+        lat: parseFloat(lat!),
+        lng: parseFloat(lng!),
+        name: name || undefined,
+      });
+    }
+
     if (fips) {
       loadCounty(fips, request, true);
+    } else if (hasPin) {
+      setViewMode('counties');
+      fetch(`https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lng}&format=json`)
+        .then((r) => r.json())
+        .then((geo) => {
+          const countyFips = geo?.results?.[0]?.county_fips;
+          if (countyFips) loadCounty(countyFips, request, true);
+          else loadState(DEFAULT_STATE_CODE, request);
+        })
+        .catch(() => loadState(DEFAULT_STATE_CODE, request));
     } else if (query) {
       searchCounties(query, 1)
         .then((results) => {
@@ -177,6 +201,7 @@ export default function RiskMapPage() {
     setViewMode('states');
     setSelectedCounty(null);
     setFocus(null);
+    setPinLocation(null);
   };
 
   // Legend, colours and tooltips for the current measure
@@ -210,7 +235,7 @@ export default function RiskMapPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcfbf7] text-[#111827] flex flex-col justify-between">
+    <div className="min-h-screen bg-[#fcfbf7] text-[#111827] dark:bg-[#11100e] dark:text-[#f3f4f6] flex flex-col justify-between transition-colors duration-200">
       <Navigation />
 
       <main className="max-w-7xl w-full mx-auto px-6 py-8">
@@ -229,7 +254,7 @@ export default function RiskMapPage() {
         />
 
         {mapError && (
-          <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 rounded-xl">
+          <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 dark:text-red-200 dark:bg-red-950/50 dark:border-red-900/60 rounded-xl">
             {mapError}. Is the backend running?
           </p>
         )}
@@ -253,7 +278,7 @@ export default function RiskMapPage() {
           {/* Conditional Sidebar: Shows County details if in county mode, State details otherwise */}
           <div className={`relative ${loading ? 'opacity-60 transition-opacity' : ''}`}>
             {error && (
-              <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 rounded-xl lg:w-88">
+              <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 dark:text-red-200 dark:bg-red-950/50 dark:border-red-900/60 rounded-xl lg:w-88">
                 {error}. Is the backend running?
               </p>
             )}
@@ -268,7 +293,7 @@ export default function RiskMapPage() {
                 onDrillDown={handleDrillDownToCounties}
               />
             ) : (
-              <aside className="w-full lg:w-88 bg-white border border-gray-200/90 rounded-2xl p-6 text-xs font-mono text-gray-500">
+              <aside className="w-full lg:w-88 bg-white border border-gray-200/90 dark:bg-[#181613] dark:border-white/10 rounded-2xl p-6 text-xs font-mono text-gray-500 dark:text-gray-400">
                 {error ? 'No data to show.' : 'Loading risk data...'}
               </aside>
             )}

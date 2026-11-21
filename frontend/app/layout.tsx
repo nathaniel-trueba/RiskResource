@@ -1,15 +1,12 @@
+// frontend/app/layout.tsx
 import type { Metadata } from 'next';
-import { Bricolage_Grotesque, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
-
-const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bricolage' });
-const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans' });
-const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains' });
+import { ThemeProvider } from '@/components/common/ThemeProvider';
 
 export const metadata: Metadata = {
   title: 'Risk Resource | US Natural Disaster Risk',
   description:
-    'Synthesizing federal data from FEMA, NOAA, USGS and NIFC into an explainable risk index for homeowners and communities.',
+    'Synthesizing federal data from FEMA, NOAA, USGS, and NIFC into an explainable risk index for homeowners and communities.',
 };
 
 export default function RootLayout({
@@ -18,9 +15,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="light">
-      <body className="min-h-screen bg-[#fcfbf7] text-[#111827] antialiased">
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-screen bg-[#fcfbf7] text-[#111827] dark:bg-[#11100e] dark:text-[#f3f4f6] antialiased transition-colors duration-200">
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
