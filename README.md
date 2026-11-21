@@ -38,7 +38,10 @@ The team will build its own dataset by pulling from free public sources, includi
 | Weather Conditions & Wildfire | Open-Meteo Forecast API |
 | Flood | NOAA National Water Prediction Service (NWPS) Gauges API, NWS Active Alerts |
 | Earthquake | USGS Earthquake Catalog API |
-| Historical Baseline | OpenFEMA Disaster Declarations Summaries API |
+| Historical Baseline | OpenFEMA Disaster Declarations Summaries API, USGS Earthquake Catalog |
+| Expected Annual Loss | FEMA National Risk Index (NRI), December 2025 release |
+
+The full list, with exactly how each source is called, is in [claude-docs/apis.md](claude-docs/apis.md) and [claude-docs/apis-usage.md](claude-docs/apis-usage.md).
 
 ## Planned Tech Stack
 
@@ -54,85 +57,102 @@ The team will build its own dataset by pulling from free public sources, includi
 
 ```text
 RiskResource/
-├── backend/
+├── backend/                     FastAPI service (see backend/README.md)
 │   ├── app/
-│   │   ├── clients/
-│   │   │   ├── __init__.py
+│   │   ├── clients/             One client per upstream API
 │   │   │   ├── nwps.py
 │   │   │   ├── nws.py
 │   │   │   ├── open_meteo.py
 │   │   │   └── usgs.py
 │   │   ├── core/
-│   │   │   ├── __init__.py
-│   │   │   └── cache.py
-│   │   ├── domain/
-│   │   │   ├── __init__.py
+│   │   │   └── cache.py         In-memory TTL cache
+│   │   ├── domain/              Scoring rules and hazard tables, no I/O
 │   │   │   ├── geo.py
 │   │   │   ├── hazards.py
 │   │   │   └── scoring.py
-│   │   ├── routers/
-│   │   │   ├── __init__.py
+│   │   ├── routers/             One module per endpoint group
 │   │   │   ├── counties.py
 │   │   │   ├── health.py
 │   │   │   ├── map_values.py
 │   │   │   ├── search.py
 │   │   │   └── states.py
 │   │   ├── services/
-│   │   ├── __init__.py
+│   │   │   ├── reference.py     Loads reference data from the database
+│   │   │   ├── risk.py          Builds state, county and map responses
+│   │   │   ├── search.py
+│   │   │   └── snapshot.py      National scores from nationwide feeds
 │   │   ├── config.py
+│   │   ├── db.py                Postgres connection, schema creation, seeding
 │   │   ├── dependencies.py
 │   │   ├── main.py
-│   │   └── schemas.py
+│   │   └── schemas.py           API response models
 │   ├── data/
-│   │   └── reference.json
+│   │   └── reference.json       Committed snapshot that seeds the database
+│   ├── db/
+│   │   └── schema.sql
 │   ├── scripts/
-│   │   ├── __init__.py
-│   │   └── build_reference_data.py
+│   │   ├── build_reference_data.py
+│   │   └── init_db.py
 │   ├── env.example
+│   ├── README.md
 │   └── requirements.txt
-├── frontend/
+├── claude-docs/                 Detailed docs for developers and coding agents
+│   ├── apis.md
+│   ├── apis-usage.md
+│   ├── backend-doc.md
+│   ├── frontend-doc.md
+│   └── human-review.md          Decisions and issues that need a human
+├── frontend/                    Next.js site
 │   ├── app/
-│   │   ├── about/
-│   │   │   └── page.tsx
-│   │   ├── map/
-│   │   │   └── page.tsx
+│   │   ├── about/page.tsx       /about
+│   │   ├── map/page.tsx         /map
 │   │   ├── globals.css
 │   │   ├── layout.tsx
-│   │   └── page.tsx
+│   │   └── page.tsx             /
 │   ├── components/
+│   │   ├── about/
+│   │   │   └── ScoreExplainer.tsx
 │   │   ├── common/
 │   │   │   ├── Footer.tsx
 │   │   │   └── Navigation.tsx
 │   │   ├── home/
-│   │   │   ├── CtaBanner.tsx
 │   │   │   ├── FeaturesGrid.tsx
 │   │   │   ├── HazardMapShowcase.tsx
 │   │   │   ├── HeroScoreCard.tsx
-│   │   │   ├── HeroSection.tsx
-│   │   │   ├── MiniMapPreview.tsx
-│   │   │   └── StatsSection.tsx
+│   │   │   └── HomeSearch.tsx
 │   │   └── map/
 │   │       ├── CountyInspector.tsx
+│   │       ├── ExpectedLossSection.tsx
 │   │       ├── MapControls.tsx
 │   │       ├── MapLegend.tsx
 │   │       ├── RiskLeafletMap.tsx
 │   │       └── StateInspector.tsx
 │   ├── lib/
-│   │   ├── mockRiskData.ts
-│   │   └── types.ts
-│   ├── public/
+│   │   ├── api.ts               Every backend call
+│   │   ├── format.ts
+│   │   ├── nri.ts
+│   │   ├── riskColors.ts
+│   │   └── types.ts             Mirrors backend/app/schemas.py
 │   ├── eslint.config.mjs
 │   ├── next.config.ts
 │   ├── package-lock.json
 │   ├── package.json
 │   └── tsconfig.json
-├── model/
-├── notebooks/
-├── visuals/
 ├── .gitignore
-├── LICENSE
 └── README.md
 ```
+
+Empty `__init__.py` files are left out.
+
+## Documentation
+
+| Doc | For |
+|---|---|
+| [backend/README.md](backend/README.md) | Setting up and running the backend |
+| [claude-docs/backend-doc.md](claude-docs/backend-doc.md) | The API, scoring model, database, caching and deployment, in detail |
+| [claude-docs/frontend-doc.md](claude-docs/frontend-doc.md) | The frontend's structure, data flow and data contract |
+| [claude-docs/apis.md](claude-docs/apis.md), [apis-usage.md](claude-docs/apis-usage.md) | External APIs and exactly how they're called |
+| [claude-docs/human-review.md](claude-docs/human-review.md) | Decisions nobody has approved yet, and known issues, most important first |
 
 ## Backend Setup
 
@@ -144,7 +164,8 @@ Supabase Postgres database. Only the backend talks to Supabase.
 1. Copy `backend/env.example` to `backend/.env` and set `DATABASE_URL` to the
    Supabase **session pooler** connection string, with the real database password.
 2. Install dependencies: `pip install -r backend/requirements.txt`
-3. Start the API (from `backend/`): `uvicorn app.main:app --reload`
+3. Start the API (from `backend/`): `python -m uvicorn app.main:app --reload`. It runs
+   at http://localhost:8000, with interactive docs at http://localhost:8000/docs.
 
 On startup the API creates any missing tables from `backend/db/schema.sql` and,
 if the reference data is empty, seeds it from the committed `data/reference.json`
@@ -152,8 +173,24 @@ snapshot. Both happen only once; later startups just read the data.
 
 To replace data that's already seeded (from `backend/`):
 - `python -m scripts.init_db --reseed` reloads it from `data/reference.json`
-- `python -m scripts.init_db --refresh` rebuilds it from FEMA, USGS and Census
+- `python -m scripts.init_db --refresh` rebuilds it from FEMA, USGS, Census and the NRI
   (about a minute), updates `data/reference.json`, then reseeds
+
+Both write to the database the whole team shares.
+
+## Frontend Setup
+
+With the backend running, from `frontend/`:
+
+```bash
+npm ci
+npm run dev        # http://localhost:3000
+```
+
+The site calls the backend at `NEXT_PUBLIC_API_URL`, which defaults to
+`http://localhost:8000/api`. A deployed site needs it set to the deployed backend's URL
+(plus `/api`) at build time; see
+[claude-docs/backend-doc.md](claude-docs/backend-doc.md#deploying).
 
 ## Git and GitHub Workflow for DS3 Projects
 

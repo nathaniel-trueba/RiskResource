@@ -43,9 +43,22 @@ Start the API:
 python -m uvicorn app.main:app --reload
 ```
 
+Use `python -m uvicorn` rather than `uvicorn`: on Windows, Smart App Control can block
+the `uvicorn.exe` launcher that pip installs.
+
 On the first start against an empty database, the API creates the tables and seeds
 them from `data/reference.json`, which takes a few seconds. Later starts only check
 that this was done. Interactive API docs are at http://localhost:8000/docs.
+
+### Deploying
+
+Run it as a long-running web service (for example on Render), not as serverless
+functions: it loads data at startup and caches live feeds in memory. Start command:
+`uvicorn app.main:app --host 0.0.0.0 --port $PORT`, from `backend/`. Set
+`DATABASE_URL`, and `CORS_ORIGINS` to a JSON list with the site's address, e.g.
+`["https://<site>.vercel.app"]`. Then set `NEXT_PUBLIC_API_URL` on the frontend to the
+backend's URL plus `/api`, and redeploy the frontend. Details and troubleshooting are in
+[`claude-docs/backend-doc.md`](../claude-docs/backend-doc.md#deploying).
 
 ### Database commands
 
@@ -112,8 +125,8 @@ backend/
 
 1. `db.initialize` creates any tables missing from `db/schema.sql`, and seeds the
    reference data from `data/reference.json` if it's empty.
-2. `ReferenceData.from_database` reads about 22k small rows into memory. Requests never
-   query the database.
+2. `ReferenceData.from_database` reads about 46k small rows into memory, including the
+   NRI loss tables. Requests never query the database.
 3. The shared HTTP client, the TTL cache, the upstream clients and the two services are
    created and stored on `app.state`. Routes get them through `dependencies.py`.
 4. A background task builds the first national snapshot, so the first visitor doesn't
@@ -135,7 +148,10 @@ backend/
   (75 to 100).
 
 All thresholds live in `domain/scoring.py` and `domain/hazards.py`. The frontend's
-`/about` page describes the same model, so update it when you change a rule.
+`/about` page is meant to describe this model, so update it when you change a rule.
+Parts of it are currently out of date, including its score slider
+(`components/about/ScoreExplainer.tsx`), which shows a different formula. See
+[`claude-docs/human-review.md`](../claude-docs/human-review.md).
 
 ### Upstream failures
 
