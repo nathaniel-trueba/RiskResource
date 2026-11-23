@@ -82,15 +82,15 @@ export default function AboutDataPage() {
             — Methodology & Ingestion Pipelines
           </span>
           <h1 className="text-4xl sm:text-5xl font-normal tracking-tight text-gray-950 dark:text-white leading-tight">
-            About the data, <br />
+            About the data <br />
             <span className="font-semibold text-gray-600 dark:text-gray-400">
-              The science of explainability.
+              From scattered data to one clear score.
             </span>
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
-            Hazard risk information is scattered across disparate agency databases built for research,
-            not for everyday residents asking <em>&ldquo;how worried should I be about my home right now?&rdquo;</em>{' '}
-            Risk Resource synthesizes historical baselines with real-time physical telemetry.
+            Risk Resource synthesizes natural disaster data from government agencies like FEMA, the National Weather Service and USGS. 
+            We organize these large datasets so they serve everyday people wondering, <em>&ldquo;How worried should I be about my home right now?&rdquo;</em> Our 
+            risk score measures the financial cost of disasters, social vulnerability, and community resilience, based on FEMA&rsquo;s records of past disasters across the country.
           </p>
         </section>
 
