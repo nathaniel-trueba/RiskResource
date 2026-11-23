@@ -17,7 +17,7 @@ export default function HomePage() {
           {/* Left column */}
           <div className="lg:col-span-7">
             <span className="text-xs font-mono uppercase tracking-[0.2em] text-amber-700 dark:text-[#e29b4d] block mb-4 font-semibold">
-              FEMA · USGS · NWS DATA · 3,221 COUNTIES
+              FEMA · USGS · NWS DATA · US COUNTIES
             </span>
 
             <h1 className="font-display text-5xl sm:text-7xl font-extrabold text-gray-950 dark:text-white tracking-[-0.03em] leading-[1.05]">
@@ -48,7 +48,7 @@ export default function HomePage() {
             Risk looks different for every hazard.
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-3 mb-8">
-            The same map, recolored by hazard. Pick one, or let it cycle.
+
           </p>
           <HazardMapShowcase />
         </section>

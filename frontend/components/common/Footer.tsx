@@ -106,9 +106,8 @@ export default function Footer() {
             Team
           </h5>
           <ul className="space-y-2 text-xs">
-            {['Member 1', 'Member 2', 'Member 3', 'Member 4'].map((name) => (
+            {['Aditya Davanam', 'Lilia Maxwell', 'Kevin Li', 'Nikhita Kadam'].map((name) => (
               <li key={name}>
-                {/* TODO: replace href with each member's LinkedIn URL */}
                 <a
                   href="#"
                   target="_blank"
