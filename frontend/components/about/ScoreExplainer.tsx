@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Bricolage_Grotesque, Public_Sans, IBM_Plex_Mono } from 'next/font/google';
 
-// Interactive "how a score is built" explainer, styled to match the Risk Resource prototype.
+// Interactive "What impacts your risk" explainer, styled to match the Risk Resource prototype.
 // Simplified for learning: FEMA's real method ranks every county against all others nationally.
 
 const display = Bricolage_Grotesque({ subsets: ['latin'], weight: ['700', '800'] });
@@ -106,12 +106,12 @@ export default function ScoreExplainer() {
         {/* Left: heading */}
         <div className="lg:w-80 shrink-0">
           <span className={`${mono.className} block text-[13px] font-medium uppercase tracking-[0.12em]`} style={{ color: C.accent }}>
-            How a score is built
+            What impacts your risk
           </span>
           <h2 className={`${display.className} mt-4 text-[34px] font-extrabold leading-[1.05] tracking-tight`} style={{ color: C.ink }}>
-            Three ingredients,
+             How three variables,
             <br />
-            one number.
+            shape your risk.
           </h2>
           <p className="mt-5 text-[17px] leading-relaxed" style={{ color: C.muted }}>
             A county&rsquo;s risk score combines what hazards are expected to cost with how vulnerable and how
@@ -139,7 +139,7 @@ export default function ScoreExplainer() {
             <Slider
               id="explainer-sovi"
               label="Social vulnerability"
-              help="How hard it is for residents to prepare and recover (income, age, housing, language)."
+              help="How hard it is for residents to prepare and recover (income, age, housing)."
               value={sovi}
               display={String(sovi)}
               min={0}
