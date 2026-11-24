@@ -43,15 +43,15 @@ The team will build its own dataset by pulling from free public sources, includi
 
 The full list, with exactly how each source is called, is in [claude-docs/apis.md](claude-docs/apis.md) and [claude-docs/apis-usage.md](claude-docs/apis-usage.md).
 
-## Planned Tech Stack
+## Tech Stack
 
 | Area | Tools |
 |------|-------|
-| Data and geospatial | Python, pandas, GeoPandas, PostGIS or DuckDB spatial |
-| Modeling | scikit-learn, XGBoost, SHAP |
-| Cloud | AWS (S3, Lambda, API Gateway, EventBridge, SageMaker, CloudWatch) |
-| Frontend | Next.js, React, a web mapping library (MapLibre GL or Leaflet), Vercel |
-| Explanations | Claude API |
+| Backend | Python, FastAPI, psycopg |
+| Database | Postgres hosted on Supabase |
+| Data sources | FEMA National Risk Index (ArcGIS), NWS alerts, USGS earthquakes, NOAA NWPS river gauges, Open-Meteo |
+| Cloud | AWS Lambda, EventBridge, CloudWatch Logs |
+| Frontend | Next.js, React, TypeScript, Tailwind CSS, Leaflet |
 
 ## Repository Structure
 
