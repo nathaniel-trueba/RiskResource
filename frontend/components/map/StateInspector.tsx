@@ -21,15 +21,15 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
               {stateData.countiesCount} counties · {stateData.population} residents
             </p>
           </div>
-          <div className="text-right">
-            <span className="text-3xl font-black font-mono text-gray-900 block leading-none">
-              {stateData.compositeScore}
-              <span className="text-xs font-normal text-gray-400">/100</span>
-            </span>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#7a221b] text-white inline-block mt-1">
-              {stateData.tier} Risk
-            </span>
-          </div>
+			<div className="text-right shrink-0">
+			<span className="text-3xl font-black font-mono text-gray-900 block leading-none">
+				{stateData.compositeScore}
+				<span className="text-xs font-normal text-gray-400">/100</span>
+			</span>
+			<span className="inline-flex items-center justify-center text-center whitespace-nowrap text-[10px] font-semibold leading-none px-2.5 py-1 rounded-full bg-[#7a221b] text-white mt-1.5">
+				{stateData.tier} Risk
+			</span>
+			</div>
         </div>
 
         {/* 2x2 Metric Grid */}
