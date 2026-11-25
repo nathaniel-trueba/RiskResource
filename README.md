@@ -43,96 +43,99 @@ The team will build its own dataset by pulling from free public sources, includi
 
 The full list, with exactly how each source is called, is in [claude-docs/apis.md](claude-docs/apis.md) and [claude-docs/apis-usage.md](claude-docs/apis-usage.md).
 
-## Planned Tech Stack
+## Tech Stack
 
 | Area | Tools |
 |------|-------|
-| Data and geospatial | Python, pandas, GeoPandas, PostGIS or DuckDB spatial |
-| Modeling | scikit-learn, XGBoost, SHAP |
-| Cloud | AWS (S3, Lambda, API Gateway, EventBridge, SageMaker, CloudWatch) |
-| Frontend | Next.js, React, a web mapping library (MapLibre GL or Leaflet), Vercel |
-| Explanations | Claude API |
+| Backend | Python, FastAPI, psycopg |
+| Database | Postgres hosted on Supabase |
+| Data sources | FEMA National Risk Index (ArcGIS), NWS alerts, USGS earthquakes, NOAA NWPS river gauges, Open-Meteo |
+| Cloud | AWS Lambda, EventBridge, CloudWatch Logs |
+| Frontend | Next.js, React, TypeScript, Tailwind CSS, Leaflet |
 
 ## Repository Structure
 
 ```text
 RiskResource/
-├── backend/                     FastAPI service (see backend/README.md)
+├── backend/                       FastAPI service (see backend/README.md)
 │   ├── app/
-│   │   ├── clients/             One client per upstream API
-│   │   │   ├── nwps.py
-│   │   │   ├── nws.py
-│   │   │   ├── open_meteo.py
-│   │   │   └── usgs.py
+│   │   ├── clients/               One client per upstream API
+│   │   │   ├── nwps.py            NOAA NWPS river gauge list (large, slow nationwide call)
+│   │   │   ├── nws.py             NWS active weather alerts
+│   │   │   ├── open_meteo.py      Open-Meteo geocoding and current weather
+│   │   │   └── usgs.py            USGS earthquake feed
 │   │   ├── core/
-│   │   │   └── cache.py         In-memory TTL cache
-│   │   ├── domain/              Scoring rules and hazard tables, no I/O
-│   │   │   ├── geo.py
-│   │   │   ├── hazards.py
-│   │   │   └── scoring.py
-│   │   ├── routers/             One module per endpoint group
-│   │   │   ├── counties.py
-│   │   │   ├── health.py
-│   │   │   ├── map_values.py
-│   │   │   ├── search.py
-│   │   │   └── states.py
+│   │   │   └── cache.py           In-memory TTL cache
+│   │   ├── domain/                Scoring rules and hazard tables, no I/O
+│   │   │   ├── geo.py             Geography helpers
+│   │   │   ├── hazards.py         Hazard definitions and NRI hazard-code mapping
+│   │   │   └── scoring.py         Risk score calculation
+│   │   ├── routers/               One module per endpoint group
+│   │   │   ├── counties.py        County endpoints
+│   │   │   ├── health.py          Health check endpoint
+│   │   │   ├── map_values.py      Per-place values used to color the map
+│   │   │   ├── search.py          County and state search endpoint
+│   │   │   └── states.py          State endpoints
 │   │   ├── services/
-│   │   │   ├── reference.py     Loads reference data from the database
-│   │   │   ├── risk.py          Builds state, county and map responses
-│   │   │   ├── search.py
-│   │   │   └── snapshot.py      National scores from nationwide feeds
-│   │   ├── config.py
-│   │   ├── db.py                Postgres connection, schema creation, seeding
-│   │   ├── dependencies.py
-│   │   ├── main.py
-│   │   └── schemas.py           API response models
+│   │   │   ├── reference.py       Loads reference data from the database
+│   │   │   ├── risk.py            Builds state, county and map responses
+│   │   │   ├── search.py          Search logic behind the search endpoint
+│   │   │   └── snapshot.py        National scores from nationwide feeds
+│   │   ├── config.py              Settings read from environment variables
+│   │   ├── db.py                  Postgres connection, schema creation, seeding
+│   │   ├── dependencies.py        Shared FastAPI dependencies
+│   │   ├── main.py                FastAPI app setup and router registration
+│   │   └── schemas.py             API response models
+│   ├── aws/
+│   │   └── lambda_function.py     Scheduled collector: fetches NWS, USGS, NOAA, Open-Meteo and FEMA NRI data and upserts it into Postgres
 │   ├── data/
-│   │   └── reference.json       Committed snapshot that seeds the database
+│   │   └── reference.json         Committed snapshot that seeds the database
 │   ├── db/
-│   │   └── schema.sql
+│   │   └── schema.sql             Postgres tables, including api_config and the NRI tables
 │   ├── scripts/
-│   │   ├── build_reference_data.py
-│   │   └── init_db.py
-│   ├── env.example
+│   │   ├── build_reference_data.py  Rebuilds data/reference.json from FEMA NRI
+│   │   └── init_db.py             Creates the schema and seeds the database
+│   ├── env.example                Template for required environment variables
 │   ├── README.md
 │   └── requirements.txt
-├── claude-docs/                 Detailed docs for developers and coding agents
+├── claude-docs/                   Detailed docs for developers and coding agents
 │   ├── apis.md
 │   ├── apis-usage.md
 │   ├── backend-doc.md
 │   ├── frontend-doc.md
-│   └── human-review.md          Decisions and issues that need a human
-├── frontend/                    Next.js site
+│   └── human-review.md            Decisions and issues that need a human
+├── frontend/                      Next.js site
 │   ├── app/
-│   │   ├── about/page.tsx       /about
-│   │   ├── map/page.tsx         /map
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx             /
+│   │   ├── about/page.tsx         /about
+│   │   ├── map/page.tsx           /map
+│   │   ├── globals.css            Global styles
+│   │   ├── layout.tsx             Root layout: page metadata and theme provider
+│   │   └── page.tsx               / (hero, hazard map showcase, features grid)
 │   ├── components/
 │   │   ├── about/
-│   │   │   └── ScoreExplainer.tsx
+│   │   │   └── ScoreExplainer.tsx   Explains how the risk score is built
 │   │   ├── common/
-│   │   │   ├── Footer.tsx
-│   │   │   └── Navigation.tsx
+│   │   │   ├── Footer.tsx         Site footer
+│   │   │   ├── Navigation.tsx     Sticky top bar with page links and theme toggle
+│   │   │   └── ThemeProvider.tsx  Light/dark theme context, saved in localStorage
 │   │   ├── home/
-│   │   │   ├── FeaturesGrid.tsx
-│   │   │   ├── HazardMapShowcase.tsx
-│   │   │   ├── HeroScoreCard.tsx
-│   │   │   └── HomeSearch.tsx
+│   │   │   ├── FeaturesGrid.tsx   "What you can do" feature cards
+│   │   │   ├── HazardMapShowcase.tsx  US map that cycles through the five hazards
+│   │   │   ├── HeroScoreCard.tsx  Sample score card with a county picker and hazard bars
+│   │   │   └── HomeSearch.tsx     County and state search box on the home page
 │   │   └── map/
-│   │       ├── CountyInspector.tsx
-│   │       ├── ExpectedLossSection.tsx
-│   │       ├── MapControls.tsx
-│   │       ├── MapLegend.tsx
-│   │       ├── RiskLeafletMap.tsx
-│   │       └── StateInspector.tsx
+│   │       ├── CountyInspector.tsx    Side panel for a selected county
+│   │       ├── ExpectedLossSection.tsx  Expected annual loss breakdown
+│   │       ├── MapControls.tsx    Geography, metric and hazard controls
+│   │       ├── MapLegend.tsx      Color legend for the map
+│   │       ├── RiskLeafletMap.tsx Leaflet map of states and counties
+│   │       └── StateInspector.tsx Side panel for a selected state
 │   ├── lib/
-│   │   ├── api.ts               Every backend call
-│   │   ├── format.ts
-│   │   ├── nri.ts
-│   │   ├── riskColors.ts
-│   │   └── types.ts             Mirrors backend/app/schemas.py
+│   │   ├── api.ts                 Every backend call
+│   │   ├── format.ts              Number and currency formatting helpers
+│   │   ├── nri.ts                 FEMA NRI labels and helpers
+│   │   ├── riskColors.ts          Color ramps for risk scores
+│   │   └── types.ts               Mirrors backend/app/schemas.py
 │   ├── eslint.config.mjs
 │   ├── next.config.ts
 │   ├── package-lock.json
@@ -191,98 +194,6 @@ The site calls the backend at `NEXT_PUBLIC_API_URL`, which defaults to
 `http://localhost:8000/api`. A deployed site needs it set to the deployed backend's URL
 (plus `/api`) at build time; see
 [claude-docs/backend-doc.md](claude-docs/backend-doc.md#deploying).
-
-## Git and GitHub Workflow for DS3 Projects
-
-Using Git and GitHub well is just as important as writing good code. A clean workflow makes collaboration easier and helps the project stay organized.
-
-### 1. Use branches to separate work
-
-Each person or feature should usually work in its own branch. This prevents people from overwriting each other's changes.
-
-Common branch commands:
-
-```bash
-git branch
-git checkout -b feature/my-task
-git checkout main
-git branch -d feature/my-task
-```
-
-What they mean:
-
-- `git branch` shows existing branches
-- `git checkout -b feature/my-task` creates and switches to a new branch
-- `git checkout main` switches back to the main branch
-- `git branch -d feature/my-task` deletes a branch after it is merged
-
-### 2. Use pull requests to merge code into main
-
-When work is complete, open a Pull Request (PR) from your branch into `main`. A PR is the place to review changes, discuss issues, and confirm everything is ready.
-
-Important rule:
-
-- Only project managers or mentors should approve pull requests.
-- Students should contribute code, but approvals should be handled by the designated maintainers.
-
-### 3. Basic Git commands and what they mean
-
-```bash
-git clone <repo-url>
-git status
-git add <file>
-git add .
-git commit -m "Describe your change"
-git push origin <branch-name>
-git log
-git merge <branch-name>
-git rebase <branch-name>
-```
-
-What they mean:
-
-- `git clone` copies a repository from GitHub to your local machine
-- `git status` shows which files changed and what branch you are on
-- `git add` stages files for commit
-- `git commit` saves staged changes with a message
-- `git push` uploads your local commits to GitHub
-- `git log` shows recent commit history
-- `git merge` combines another branch into your current branch
-- `git rebase` reapplies your commits on top of another branch and can help keep history cleaner
-
-### 4. Recommended team habits
-
-- Pull the latest changes before starting work
-- Keep commits small and descriptive
-- Avoid committing large data files or secrets
-- Open a PR early for feedback, not only at the end
-- Resolve merge conflicts carefully and communicate with the team
-
-### 5. Example workflow
-
-```bash
-git checkout main
-git pull origin main
-git checkout -b feature/data-cleaning
-git status
-git add .
-git commit -m "Add initial data cleaning script"
-git push origin feature/data-cleaning
-```
-
-Then open a Pull Request on GitHub and wait for approval from the appropriate project manager or mentor.
-
-## Notes for DS3 Projects
-
-This template is intentionally simple so students can focus on the science instead of setup. As projects grow, teams can add:
-
-- experiment tracking
-- model checkpoints
-- deployment scripts
-- cloud infrastructure (AWS/GCP) in `infra/`
-- frontend UI/UX code in `frontend/`
-- CI checks
-- docs pages
 
 ## Disclaimer **
 
