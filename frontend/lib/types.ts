@@ -38,11 +38,21 @@ export interface StateExpectedLoss extends ExpectedLoss {
   highLossPopulationPct?: number;     // % of residents in high-loss counties
 }
 
+// The wildfire model's part of the overall score (20% of it). See SCORE_WEIGHTS.
+export interface WildfireModelInfo {
+  score: number;        // 0 to 100, from the weekly probability on a log scale
+  tier: Tier;
+  probability?: number; // Chance a large wildfire starts in the county this week, 0 to 1. Counties only.
+  weekStart: string;    // The Monday of the forecast week, e.g. "2026-11-23"
+}
+
 export interface StateRecord {
   code: string;
   name: string;
   row?: number;        // Grid position, only used by CartogramGrid
   col?: number;
+  // Overall score: 40% historical, 40% live (through the hazard scores) and 20%
+  // wildfire model. The hazard composite alone when wildfireModel is omitted.
   compositeScore: number;
   tier: Tier;
   countiesCount: number;
@@ -50,6 +60,7 @@ export interface StateRecord {
   activeAlertCount?: number;
   primaryAlert?: string;
   hazards: HazardItem[];
+  wildfireModel?: WildfireModelInfo;  // Population-weighted. Omitted when the model file is missing or stale
   expectedLoss?: StateExpectedLoss;   // Omitted when NRI has no data
 }
 
@@ -57,12 +68,13 @@ export interface CountyRecord {
   name: string;
   state: string;
   stateCode?: string;  // Two letters, e.g. "CA"
-  compositeScore: number;
+  compositeScore: number;  // Overall score, as for StateRecord
   tier: Tier;
   fips?: string;
   pop: string;
   activeAlert?: string;
   hazards: HazardItem[];
+  wildfireModel?: WildfireModelInfo;  // Omitted when the model is unavailable for the county
   // Omitted when NRI has no county data, e.g. Connecticut, which NRI reports by
   // planning region instead
   expectedLoss?: CountyExpectedLoss;
