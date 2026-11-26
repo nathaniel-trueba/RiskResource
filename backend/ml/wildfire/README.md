@@ -1,9 +1,9 @@
 # Wildfire ignition model
 
 An XGBoost model that gives, for every county and week, the **probability that a large
-wildfire starts in that county that week**. It's step 1 of the wildfire threat score:
-the backend will combine this weekly probability with the slow-changing baseline
-(FEMA NRI), and show which features push a county above its usual level.
+wildfire starts in that county that week**. It's 20% of the site's overall threat score
+(40% historical, 40% live, 20% this model), which gives the overall score a wildfire
+bias. See [Weekly scores for the API](#weekly-scores-for-the-api).
 
 - Supervised binary classification, one row per county per week (Monday to Sunday).
 - Fires are rare (about 0.2% of county-weeks), so fire rows are weighted with
@@ -185,7 +185,37 @@ python -m jupyter nbconvert --to notebook --execute --inplace 02_train_evaluate.
 | `metadata.json` | Feature list, parameters, splits, `scale_pos_weight` and all metrics |
 | `feature_importance.csv` | Mean absolute SHAP value on the test years, and gain |
 
-## Using the model (step 2)
+## Weekly scores for the API
+
+The API doesn't load this model. Once a week, from `backend/` with the ML dependencies
+installed:
+
+```bash
+python -m ml.wildfire.predict_week                    # This week (Monday on or before today, UTC)
+python -m ml.wildfire.predict_week --week 2026-11-23  # A specific Monday
+```
+
+It downloads 180 days of NASA POWER weather for every grid cell (about 30 minutes at the
+default 60 requests a minute; downloads are cached under `data/live/`, so a re-run only
+fetches what failed), fills the days POWER doesn't have yet from the Open-Meteo
+forecast, scores every county, and publishes the result to `--output`, else `WILDFIRE_MODEL_URI`, else `backend/data/wildfire_model.json`. An `s3://bucket/key` works too (needs boto3). The format is defined in `backend/weekly_scores/contract.py`:
+
+```json
+{"schemaVersion": 1, "weekStart": "2026-11-23", "generatedAt": "...", "modelTrainedAt": "...",
+ "probabilities": {"06065": 0.00142, "...": 0}}
+```
+
+The API re-reads the file when it changes and turns each probability into a 0 to 100
+score on a log scale (`wildfire_model_score` in `app/domain/scoring.py`: 0.01% is 0,
+1% is 67, 10% or more is 100). The file counts for 13 days after its Monday; after
+that, and for counties missing from it, the overall score uses the hazards alone.
+
+On AWS, an EventBridge schedule calls `lambda_handler` in `handler.py`, which runs the same `score_week` and `publish`. See its docstring for packaging and the 15-minute Lambda limit.
+
+**Not yet validated on forecast inputs.** Check a few weeks of output against where fires
+actually started before relying on it.
+
+## Using the model
 
 ```python
 from ml.wildfire.model import WildfireModel
@@ -203,7 +233,7 @@ drivers = model.explain(X)                      # SHAP: what pushes each county 
 observed (NASA POWER's near-real-time data lags a few days), and the week itself
 comes from a forecast.
 
-Things to handle in step 2:
+Things `predict_week.py` handles, and what's still open:
 
 - **Forecast weather.** The model learned from reanalysis weather. A forecast from
   Open-Meteo has different biases, especially for wind and humidity. Map Open-Meteo's

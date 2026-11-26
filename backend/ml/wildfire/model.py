@@ -29,7 +29,7 @@ from ml.wildfire.config import ARTIFACTS_DIR
 class WildfireModel:
     """The trained booster, its isotonic calibration and the inference lookup tables.
 
-    Used by: the backend (step 2), and anything else that scores county-weeks.
+    Used by: predict_week.py, and anything else that scores county-weeks.
     """
 
     def __init__(self, directory: Path):
@@ -65,7 +65,7 @@ class WildfireModel:
             directory: Artifacts folder. Defaults to config.ARTIFACTS_DIR.
         Returns:
             A ready WildfireModel. Load once at startup and reuse it.
-        Called by: the backend (step 2), notebooks/02_train_evaluate.ipynb and
+        Called by: predict_week.py, notebooks/02_train_evaluate.ipynb and
         notebooks/03_predict.ipynb.
         """
         return cls(directory)
@@ -129,7 +129,7 @@ class WildfireModel:
             X: Feature DataFrame, e.g. from features_for_week.
         Returns:
             Array of calibrated probabilities, one per row.
-        Called by: the backend (step 2), notebooks/03_predict.ipynb.
+        Called by: predict_week.py, notebooks/03_predict.ipynb.
         """
         return self.calibrate(self.predict_raw(X))
 
@@ -146,8 +146,8 @@ class WildfireModel:
         Returns:
             DataFrame with the same index as X, one column per feature plus `bias`
             (the model's average log-odds).
-        Called by: the backend (step 2), to show what's raising a county's score;
-        notebooks/03_predict.ipynb.
+        Called by: notebooks/03_predict.ipynb. Not used by predict_week.py yet; it could
+        show on the site what's raising a county's score.
         """
         values = self.booster.predict(self._matrix(X), pred_contribs=True)
         return pd.DataFrame(values, index=X.index, columns=[*self.features, "bias"])
@@ -170,7 +170,7 @@ class WildfireModel:
             DataFrame indexed by fips with every model feature, in model order.
         Raises:
             ValueError: If week_start isn't a Monday.
-        Called by: the backend (step 2), before predict and explain;
+        Called by: predict_week.py, before predict and explain;
         notebooks/03_predict.ipynb.
         """
         week_start = pd.Timestamp(week_start).normalize()

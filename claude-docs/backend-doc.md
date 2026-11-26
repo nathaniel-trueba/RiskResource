@@ -2,7 +2,7 @@
 
 Audience: developers and coding agents working on the backend or connecting the frontend to it.
 
-Snapshot: 2026-11-18, matching `main` at `c25e614`. The backend code hasn't changed since it was merged (PR #12). If this doc and the code disagree, the code wins, and this doc should be updated.
+Snapshot: 2026-11-18, matching `main` at `c25e614`, updated 2026-11-25 for the 40/40/20 overall score that adds the wildfire model ([section 5](#5-scoring-model)). If this doc and the code disagree, the code wins, and this doc should be updated.
 
 Related docs:
 
@@ -27,8 +27,8 @@ Two separate things are served:
 | | Risk score | Expected annual loss |
 |---|---|---|
 | What | A 0 to 100 score per hazard and overall | Dollars per year per hazard, from FEMA's National Risk Index (NRI) |
-| Changes with live conditions | Yes, half of it | No, it's static |
-| Source | FEMA declarations, USGS, NWS, Open-Meteo, NWPS | NRI, December 2025 release |
+| Changes with live conditions | Yes: 40% live, plus the 20% wildfire model, which changes weekly | No, it's static |
+| Source | FEMA declarations, USGS, NWS, Open-Meteo, NWPS, and the wildfire model ([`ml/wildfire/`](../backend/ml/wildfire/README.md)) | NRI, December 2025 release |
 
 The loss figures aren't part of the score.
 
@@ -93,6 +93,8 @@ All settings are defined in [`app/config.py`](../backend/app/config.py) and can 
 | `UPSTREAM_TIMEOUT_SECONDS` | 15 | Per upstream request |
 | `*_TTL_SECONDS` | See [section 7](#7-caching-and-failure-handling) | Cache lifetimes |
 | `MAX_STALE_SECONDS`, `FAILURE_COOLDOWN_SECONDS` | 3600, 60 | Outage handling |
+| `WILDFIRE_MODEL_URI` | `data/wildfire_model.json` (under `backend/`) | Where the weekly wildfire job publishes and the API reads: a path or `s3://bucket/key` ([section 5](#wildfire-model-0-to-100)) |
+| `WILDFIRE_MODEL_MAX_AGE_DAYS` | 13 | Days after the file's `weekStart` that it's still used |
 
 ## 3. Structure
 
@@ -103,6 +105,9 @@ backend/
   env.example
   db/schema.sql                  The whole database schema; safe to re-run
   data/reference.json            Snapshot that seeds the database; generated, committed, 2.0 MB
+  data/wildfire_model.json       This week's wildfire model probabilities (the local default for WILDFIRE_MODEL_URI)
+  weekly_scores/                 Stdlib-only hand-off between the weekly job and the API: document format and stores (file, S3)
+  ml/wildfire/                   The wildfire model: training, artifacts, predict_week.py and the AWS handler.py (needs requirements-ml.txt)
   scripts/
     init_db.py                   CLI: initialize, reseed or refresh the database
     build_reference_data.py      Fetches FEMA, USGS, Census and NRI; computes the reference data
@@ -115,7 +120,8 @@ backend/
     routers/                     HTTP layer only, one file per endpoint group
     services/
       reference.py               Loads reference data from the DB into memory
-      snapshot.py                National scores from the nationwide feeds
+      snapshot.py                National scores from the nationwide feeds and the wildfire model
+      wildfire_model.py          Reads the weekly wildfire model file; re-reads it when it changes
       risk.py                    Builds StateRecord, CountyRecord and MapValue
       search.py                  Resolves text to counties
     clients/                     One file per external API; fetch and parse only
@@ -147,7 +153,7 @@ Dependencies point one way: `routers` call `services`, which call `clients` and 
 GET /api/counties/06065
   routers/counties.py
     RiskService.get_county
-      get_snapshot()          NWS alerts + USGS quakes, all counties (cached)
+      get_snapshot()          NWS alerts + USGS quakes + wildfire model, all counties (cached)
       _conditions_for()       Open-Meteo, this county (cached 30 min)
       _gauges_for()           NWPS, this county (cached 15 min)
       merge signals, score, write warnings
@@ -206,13 +212,19 @@ County names are matched locally. Anything else, such as a city or ZIP code, goe
   "name": "Riverside County",
   "state": "California",
   "stateCode": "CA",
-  "compositeScore": 47,
+  "compositeScore": 45,
   "tier": "Moderate",
   "fips": "06065",
   "pop": "2,458,395",
   "hazards": [
     { "name": "Wildfire", "score": 50, "tier": "Elevated", "warning": "..." }
   ],
+  "wildfireModel": {
+    "score": 38,
+    "tier": "Moderate",
+    "probability": 0.00142,
+    "weekStart": "2026-11-23"
+  },
   "expectedLoss": {
     "total": 2245807546.72,
     "perPerson": 929.23,
@@ -231,7 +243,7 @@ County names are matched locally. Anything else, such as a city or ZIP code, goe
 }
 ```
 
-Scores, tiers and warnings depend on live conditions, so they vary. The Wildfire score here is its baseline of 100 halved, with no live signal. `expectedLoss` is static. States have the same `expectedLoss` fields, minus the four county-only ones at the end, plus `highLossPopulationPct`.
+Scores, tiers and warnings depend on live conditions, so they vary. The Wildfire score here is its baseline of 100 halved, with no live signal. With a hazard composite of 47 and a model score of 38, `compositeScore` is 0.8 × 47 + 0.2 × 38 = 45 (the model numbers here are illustrative). `wildfireModel` is omitted when the model file is missing or stale; states have it too, population-weighted and without `probability`. `expectedLoss` is static. States have the same `expectedLoss` fields, minus the four county-only ones at the end, plus `highLossPopulationPct`.
 
 ### Rules the API follows
 
@@ -249,6 +261,26 @@ Scores, tiers and warnings depend on live conditions, so they vary. The Wildfire
 All of this is in [`app/domain/scoring.py`](../backend/app/domain/scoring.py) and [`app/domain/hazards.py`](../backend/app/domain/hazards.py).
 
 **These are decisions made for the demo, not validated risk science.** [`human-review.md`](human-review.md) lists each one with alternatives.
+
+### Overall score
+
+```
+overall score = 40% historical + 40% live + 20% wildfire model
+```
+
+The historical and live parts work per hazard, and the hazards are then combined into a hazard composite (below). So in code it's:
+
+```
+hazard score    = 50% baseline + 50% live          (their 40:40 ratio)
+hazard composite = 60% highest hazard + 40% mean of the top three
+overall          = 80% hazard composite + 20% wildfire model score
+```
+
+This is `compositeScore` in the API. The weights are `OVERALL_HISTORICAL_WEIGHT`, `OVERALL_LIVE_WEIGHT` and `OVERALL_WILDFIRE_MODEL_WEIGHT` in `scoring.py`, and `frontend/lib/scoring.ts` mirrors them for the site's text.
+
+Only wildfire has a model, so the overall score has a **wildfire bias by design**: a county with high wildfire ignition odds scores higher overall than one with the same hazard scores and low odds. Individual hazard scores, including Wildfire's, don't include the model. Neither does the map when it's filtered to one hazard.
+
+If there's no model score for an area (the file is missing, more than `WILDFIRE_MODEL_MAX_AGE_DAYS` past its week, or had no weather for that county), the overall score is the hazard composite alone. It isn't scored as if the model had said 0.
 
 ### Hazard score
 
@@ -291,13 +323,44 @@ Each source produces a `LiveSignal` of hazard, score and explanatory text. For e
 
 Weather below its thresholds scores 0 but still supplies the warning text.
 
-### Composite score
+### Hazard composite
 
 ```
-composite = 60% highest hazard + 40% mean of the top three hazards
+hazard composite = 60% highest hazard + 40% mean of the top three hazards
 ```
 
 A plain average would let hazards that don't apply to a place hide the one that does.
+
+### Wildfire model (0 to 100)
+
+The XGBoost model in [`ml/wildfire/`](../backend/ml/wildfire/README.md) estimates, per county, the calibrated probability that a large wildfire (MTBS: about 1,000+ acres in the West, 500+ in the East) starts that week. The API doesn't run it: it needs xgboost, pandas and 180 days of NASA POWER weather per grid cell. Instead, a weekly job writes one JSON file:
+
+```bash
+# From backend/, with requirements-ml.txt installed. About 30 minutes, mostly NASA POWER downloads.
+python -m ml.wildfire.predict_week
+```
+
+`services/wildfire_model.py` checks the document's version (a file's mtime, an S3 object's ETag) whenever the snapshot is rebuilt (every minute), in a worker thread, so a new week is picked up without a restart. If a check fails, the last good week is kept until it goes stale. `/api/health` reports it under `sources.wildfireModel`, including its location.
+
+**Moving the job to AWS.** The job and the API only share [`weekly_scores/`](../backend/weekly_scores/__init__.py): the document format (`contract.py`) and where it's stored (`store.py`). To migrate:
+
+1. Run [`ml/wildfire/handler.py`](../backend/ml/wildfire/handler.py)'s `lambda_handler` (or `python -m ml.wildfire.predict_week` in a container) from an EventBridge schedule, with `WILDFIRE_MODEL_URI=s3://<bucket>/<key>`. The handler's docstring covers packaging and the runtime limit: the run takes about 30 minutes, which is over Lambda's 15.
+2. Set the API's `WILDFIRE_MODEL_URI` to the same `s3://` URI, add `boto3` to `requirements.txt`, and give the API `s3:GetObject` on that key.
+
+No scoring code changes. To store it somewhere else, such as Supabase, add a store class with `version`, `read`, `write` and `describe`.
+
+The script uses observed NASA POWER weather for the days before the week, and fills in the days POWER doesn't have yet from the Open-Meteo forecast. Counties with no weather for the week are left out of the file.
+
+Probabilities are small (a typical county-week is well under 1%), so `wildfire_model_score` scores them on a log scale, clamped at both ends:
+
+| Weekly probability | Model score |
+|---|---|
+| 0.01% or less | 0 |
+| 0.1% | 33 |
+| 1% | 67 |
+| 10% or more | 100 |
+
+The 10% ceiling also keeps the calibrator's top step, which reaches 100% from only 8 calibration rows, from showing as certainty (see the model README).
 
 ### Tiers
 
@@ -312,7 +375,7 @@ The backend assigns tiers. The map's colour bands are different: see [frontend-d
 
 ### States
 
-A state's hazard scores are the population-weighted average of its counties, and its composite is calculated from those. Puerto Rico has no Census population data, so its municipios are weighted equally.
+A state's hazard scores are the population-weighted average of its counties, and its hazard composite is calculated from those. Its wildfire model score is the population-weighted average over its counties that have one, and its overall score combines the two the same way as a county's. Puerto Rico has no Census population data, so its municipios are weighted equally.
 
 ### Why a county's map colour can differ from its sidebar score
 
@@ -372,7 +435,7 @@ So 3,212 of our 3,221 counties have NRI data.
 | Cache key | Lifetime |
 |---|---|
 | `nws:alerts`, `usgs:recent` | 5 minutes |
-| `snapshot` (computed scores) | 1 minute |
+| `snapshot` (computed scores) | 1 minute. Each rebuild also re-reads the wildfire model document if its version changed |
 | `openmeteo:forecast:{fips}` | 30 minutes |
 | `nwps:gauges:{fips}` | 15 minutes |
 | `openmeteo:geocode:{query}` | 24 hours |
@@ -391,6 +454,8 @@ What users see when a source is unavailable:
 |---|---|
 | `activeAlert`, `primaryAlert` | `"NWS alert feed unavailable, so alert status is unknown"` |
 | Affected hazards' `warning` | `"4 federal flood declarations since 2006 (live data unavailable)"` |
+
+**NWS has a second fallback: the Lambda's alert archive.** When NWS fails and the cache has nothing under an hour old, `_build_snapshot` asks [`services/alert_archive.py`](../backend/app/services/alert_archive.py) for the alerts active at the Lambda's last run, if that run is within `ALERT_ARCHIVE_MAX_AGE_MINUTES` (90; use 30 with 15-minute runs). Every alert text then ends `(as of 14:15 UTC; live NWS feed unavailable)`, and a county with none says `No active alerts (as of ...)`. `/api/health` shows `nwsArchiveAsOf` while it's in use. It's the only database read after startup, in a worker thread during NWS outages only. If the archive is stale or unreachable, the normal "unavailable" text applies.
 
 **NWPS has its own backoff.** A 429 pauses all NWPS calls for 5 minutes, for every county, because its limits aren't published.
 
@@ -413,7 +478,11 @@ Supabase Postgres, free plan, US East region. Only the backend uses it, as the `
 | `nri_county_losses` | 19,272 | Per county and hazard: expected annual loss |
 | `nri_state_profiles` | 52 | NRI population and residents in high-loss counties |
 | `nri_state_losses` | 312 | Per state and hazard: expected annual loss |
-| `api_config`, `locations`, `weather_observations`, `earthquakes`, `weather_alerts`, `gauges` | 0 | Were already in the Supabase project. Meant for storing live API data; **unused**. They're in `schema.sql` so a new project matches |
+| `nws_alert_archive` | ~200k a year | County-level NWS alerts, written by the Lambda ([`aws/lambda_function.py`](../backend/aws/lambda_function.py)), kept `retention_days`. Slim rows: no raw response or description |
+| `archive_settings` | 1 | `retention_days` (365) and the Lambda's `last_run_at`. Edit retention in Supabase's Table Editor |
+| `api_config` | 1 | The Lambda's NWS URL, parameters and User-Agent (`nws_alerts`) |
+
+The tables the old Lambda tasks wrote (`locations`, `weather_observations`, `earthquakes`, `weather_alerts`, `gauges`) were dropped by [`db/migrations/2026-11-26_nws_alert_archive.sql`](../backend/db/migrations/2026-11-26_nws_alert_archive.sql), which moves the last year of `weather_alerts` into the archive first.
 
 The tables use foreign keys between them (counties to states, baselines to counties and hazards, and so on) and `CHECK` constraints on ranges.
 
@@ -468,6 +537,8 @@ County IDs come from the same GeoJSON file the frontend draws, so every `MapValu
 | Which NRI hazards count toward losses | `NRI_HAZARDS` and `NRI_EXCLUDED_HAZARDS` in `domain/hazards.py`, then `init_db --refresh`. Also update `frontend/lib/nri.ts` |
 | The high-loss cutoff | `HIGH_LOSS_PERCENTILE` in `scripts/build_reference_data.py`, then `init_db --refresh`. Also update the "top 20%" wording in the frontend |
 | Tier cutoffs, weights or thresholds | `domain/scoring.py` |
+| The 40/40/20 overall split, or the model's log scale | `OVERALL_*_WEIGHT` and `MODEL_PROBABILITY_*` in `domain/scoring.py`. Also update `frontend/lib/scoring.ts` and the /about text |
+| This week's wildfire model scores | Run `python -m ml.wildfire.predict_week` (weekly) |
 | Cache lifetimes, CORS origins, User-Agent | `app/config.py` or `backend/.env` |
 | A response field | `app/schemas.py` and `frontend/lib/types.ts`, together |
 
@@ -477,6 +548,8 @@ County IDs come from the same GeoJSON file the frontend draws, so every `MapValu
 
 ## 10. Known limitations
 
+- **The wildfire model runs on forecast weather.** It was trained on NASA POWER reanalysis, and this week's days come from Open-Meteo's forecast, which has different biases (especially wind and humidity). The scores haven't been validated against forecast inputs yet. Above about 0.3% it also overestimated by about a quarter in 2021-2024 (see the model README).
+- **Nothing schedules the model yet.** Someone has to run `predict_week` each week. Without it, the file goes stale after `WILDFIRE_MODEL_MAX_AGE_DAYS` and the overall score quietly drops back to the hazard composite. `/api/health` shows `wildfireModel.available: false` when that happens.
 - **Baseline is a proxy.** Declarations measure federal response rather than physical risk, and they depend on how FEMA labels events: many tornadoes are filed under "Severe Storm". The NRI losses are a better long-term measure, but they're shown separately and don't feed the score.
 - **Expected loss is modeled and partial.** It leaves out 7 NRI hazards, including heat and drought, and includes a dollar value for deaths and injuries.
 - **Connecticut has no county-level losses,** because NRI reports planning regions.
@@ -535,4 +608,5 @@ On a free tier that sleeps when idle (Render's does after 15 minutes), the first
 - Avoid repeatedly calling NWPS while testing. It rate-limited us after a few dozen requests in one session.
 - `init_db --refresh` and `--reseed` write to the shared Supabase database that the whole team uses.
 - Give every new function a docstring in the existing format.
-- Update this doc, `backend/README.md` and `apis-usage.md` when you change endpoints, sources, tables or scoring.
+- Update this doc, `backend/README.md` and `apis-usage.md` when you change endpoints, sources, tables or scoring. For scoring weights, also update `frontend/lib/scoring.ts` and the /about page.
+- Don't import `ml/` from `app/`, or `app/` from `ml/`. The API must run on `requirements.txt` alone, and the job must run without FastAPI. They meet only in `weekly_scores/`, which stays standard-library only (boto3 imported lazily).

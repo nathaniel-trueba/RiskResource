@@ -22,6 +22,7 @@ The backend also uses a Supabase Postgres database. That's our own storage, not 
 | [Census population](#census-population-estimates) | Build script | Manual | All counties | 2 files per build | Population |
 | [County GeoJSON](#county-boundaries) | Build script | Manual | All counties | 1 file per build | County list, locations |
 | [FEMA National Risk Index](#fema-national-risk-index) | Build script | Manual | All NRI counties | 2 calls per build | Expected annual loss, vulnerability and resilience ratings |
+| [NASA POWER, Open-Meteo forecast](#wildfire-model-weekly-job) | `ml/wildfire/predict_week.py` | Weekly | Every POWER grid cell (~1,900) | ~1,900 POWER calls and ~40 Open-Meteo calls per run | The wildfire model's 20% of the overall score |
 
 **None of them need an API key.** Every request sends the header `User-Agent: UCSD-Risk-Resource-NotForProfit`, set by `USER_AGENT` in [`app/config.py`](../backend/app/config.py). NWS rejects requests without a `User-Agent` (tested: 403).
 
@@ -283,6 +284,21 @@ Pages are fetched until the response no longer has `exceededTransferLimit`. Ther
 **Limits:** 2,000 records per query, the layer's `maxRecordCount`. No rate limit is stated. ArcGIS reports query errors as HTTP 200 with an `error` object, which the script checks for.
 
 **FEMA's other hosts didn't work.** The NRI services on `hazards.geoplatform.gov` didn't respond during testing.
+
+## NWS alert archive (AWS Lambda)
+
+[`aws/lambda_function.py`](../backend/aws/lambda_function.py) runs on an EventBridge schedule (hourly today; every 15 minutes recommended, because many tornado and severe thunderstorm warnings last under an hour). It makes one call: NWS active alerts, using the `nws_alerts` row of `api_config` for the URL and User-Agent, with `status=actual&message_type=alert,update` like the backend. It keeps alerts that cover a county in `public.counties`, upserts them into `nws_alert_archive`, records `archive_settings.last_run_at`, and deletes alerts sent more than `retention_days` ago. It's the backend's fallback when the API can't reach NWS. It no longer calls USGS, NWPS, Open-Meteo or the NRI.
+
+## Wildfire model weekly job
+
+[`ml/wildfire/predict_week.py`](../backend/ml/wildfire/predict_week.py) runs once a week, outside the API, and publishes to `WILDFIRE_MODEL_URI` (by default `backend/data/wildfire_model.json`, later S3). The API only reads that document.
+
+| Call | Request | Notes |
+|---|---|---|
+| NASA POWER daily point | `T2M_MAX, T2MDEW, RH2M, WS10M_MAX, PRECTOTCORR, GWETTOP, GWETROOT`, `community=AG`, 180 days before the week through today, one request per grid cell | Paced to 60 a minute with 3 workers, because POWER's CloudFront limit answers 429 above ~100 a minute. Cached under `ml/wildfire/data/live/` |
+| Open-Meteo forecast | 50 cells per request (comma-separated `latitude`/`longitude`), `daily=temperature_2m_max,dew_point_2m_mean,relative_humidity_2m_mean,wind_speed_10m_max,precipitation_sum`, `wind_speed_unit=ms`, `timezone=GMT`, 14 days before today through the week's Sunday | Only fills days POWER doesn't have. Requests are 8 s apart (`FORECAST_INTERVAL_SECONDS`): each counts as about 75 calls against the 600-a-minute limit, and unpaced runs got HTTP 429. A run uses roughly 2,000 to 3,000 of the 10,000 daily calls, shared with the API's own forecast calls |
+
+**If it fails:** failed POWER cells and Open-Meteo batches are logged and skipped. Counties with no weather for the week are left out of the file, and their overall score uses the hazards alone.
 
 ## Adding or changing an API call
 

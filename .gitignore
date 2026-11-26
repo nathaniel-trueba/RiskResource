@@ -15,3 +15,6 @@ uv.lock
 
 # Env files
 .env
+
+# Aditya Temp Files
+davanam-temp/

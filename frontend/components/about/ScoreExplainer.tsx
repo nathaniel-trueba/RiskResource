@@ -2,9 +2,12 @@
 
 import React, { useState } from 'react';
 import { Bricolage_Grotesque, Public_Sans, IBM_Plex_Mono } from 'next/font/google';
+import { SCORE_WEIGHTS } from '@/lib/scoring';
 
 // Interactive "how a score is built" explainer, styled to match the Risk Resource prototype.
-// Simplified for learning: FEMA's real method ranks every county against all others nationally.
+// Simplified to a single hazard: overall = 40% history + 40% live + 20% wildfire model
+// (backend/app/domain/scoring.py). With several hazards, history and live are blended
+// per hazard first, and the hazards are combined weighted toward the worst.
 
 const display = Bricolage_Grotesque({ subsets: ['latin'], weight: ['700', '800'] });
 const body = Public_Sans({ subsets: ['latin'], weight: ['400', '500', '600'] });
@@ -24,19 +27,18 @@ const C = {
 
 const RING_LENGTH = 263.9; // circumference of the r=42 circle
 
+// The site's tiers, from TIER_FLOORS in backend/app/domain/scoring.py.
 function rating(score: number): { label: string; color: string; bg: string } {
-  if (score >= 80) return { label: 'Very high', color: '#A51D16', bg: '#FFE3E0' };
-  if (score >= 60) return { label: 'Relatively high', color: '#B23A12', bg: '#FFE9DC' };
-  if (score >= 40) return { label: 'Relatively moderate', color: '#8A5A00', bg: '#FFF2D1' };
-  if (score >= 20) return { label: 'Relatively low', color: '#1E6B45', bg: '#E2F3EA' };
-  return { label: 'Very low', color: '#1E6B45', bg: '#E2F3EA' };
+  if (score >= 75) return { label: 'Critical', color: '#A51D16', bg: '#FFE3E0' };
+  if (score >= 50) return { label: 'Elevated', color: '#B23A12', bg: '#FFE9DC' };
+  if (score >= 30) return { label: 'Moderate', color: '#8A5A00', bg: '#FFF2D1' };
+  return { label: 'Low', color: '#1E6B45', bg: '#E2F3EA' };
 }
 
 function ringColor(score: number): string {
-  if (score >= 80) return '#B3261E';
-  if (score >= 60) return '#E8622C';
-  if (score >= 40) return '#F0812F';
-  if (score >= 20) return '#C9A227';
+  if (score >= 75) return '#B3261E';
+  if (score >= 50) return '#E8622C';
+  if (score >= 30) return '#F0812F';
   return '#3BA776';
 }
 
@@ -81,15 +83,18 @@ function Slider({ id, label, help, value, display: shown, min, max, step, onChan
 }
 
 export default function ScoreExplainer() {
-  const [eal, setEal] = useState(420); // expected annual loss, $ per person
-  const [sovi, setSovi] = useState(55); // social vulnerability, 0–100
-  const [resil, setResil] = useState(45); // community resilience, 0–100
+  const [historical, setHistorical] = useState(70); // baseline percentile, 0–100
+  const [live, setLive] = useState(0); // strongest live signal, 0–100 (0 when nothing is happening)
+  const [model, setModel] = useState(55); // wildfire model score, 0–100
 
-  const communityFactor = (0.6 + sovi / 100) / (0.6 + resil / 100);
-  const raw = eal * communityFactor;
-  const score = Math.max(0, Math.min(100, (100 * raw) / (raw + 420)));
+  const parts = {
+    historical: (SCORE_WEIGHTS.historical / 100) * historical,
+    live: (SCORE_WEIGHTS.live / 100) * live,
+    model: (SCORE_WEIGHTS.wildfireModel / 100) * model,
+  };
+  const score = Math.max(0, Math.min(100, parts.historical + parts.live + parts.model));
   const rounded = Math.round(score);
-  const r = rating(score);
+  const r = rating(rounded);
 
   return (
     <section className={`${body.className} w-full border-t`} style={{ backgroundColor: C.band, borderColor: C.line }}>
@@ -114,8 +119,9 @@ export default function ScoreExplainer() {
             one number.
           </h2>
           <p className="mt-5 text-[17px] leading-relaxed" style={{ color: C.muted }}>
-            A county&rsquo;s risk score combines what hazards are expected to cost with how vulnerable and how
-            resilient its community is. Move the sliders to see how each one pushes the score.
+            A county&rsquo;s threat score combines its disaster history, what&rsquo;s happening right now, and a
+            forecast of how likely a large wildfire is to start this week. Move the sliders to see how each one
+            pushes the score.
           </p>
         </div>
 
@@ -126,37 +132,37 @@ export default function ScoreExplainer() {
         >
           <div className="flex-1 min-w-0 flex flex-col gap-7">
             <Slider
-              id="explainer-eal"
-              label="Expected annual loss"
-              help="Average yearly damage to buildings, crops and people from all hazards."
-              value={eal}
-              display={`$${eal.toLocaleString()} / person`}
-              min={50}
-              max={1500}
-              step={10}
-              onChange={setEal}
-            />
-            <Slider
-              id="explainer-sovi"
-              label="Social vulnerability"
-              help="How hard it is for residents to prepare and recover (income, age, housing, language)."
-              value={sovi}
-              display={String(sovi)}
+              id="explainer-historical"
+              label={`History · ${SCORE_WEIGHTS.historical}%`}
+              help="How the county ranks, among counties that have had the hazard, by federal disaster declarations since 2006."
+              value={historical}
+              display={`${historical} pct`}
               min={0}
               max={100}
               step={1}
-              onChange={setSovi}
+              onChange={setHistorical}
             />
             <Slider
-              id="explainer-resil"
-              label="Community resilience"
-              help="How ready local systems are to respond and bounce back. Higher lowers the risk."
-              value={resil}
-              display={String(resil)}
+              id="explainer-live"
+              label={`Live conditions · ${SCORE_WEIGHTS.live}%`}
+              help="The strongest live signal right now, from weather alerts, forecast gusts, river gauges or recent earthquakes. Usually 0."
+              value={live}
+              display={String(live)}
               min={0}
               max={100}
               step={1}
-              onChange={setResil}
+              onChange={setLive}
+            />
+            <Slider
+              id="explainer-model"
+              label={`Wildfire model · ${SCORE_WEIGHTS.wildfireModel}%`}
+              help="This week's chance of a large wildfire starting in the county, on a log scale: 0.1% scores 33 and 1% scores 67."
+              value={model}
+              display={String(model)}
+              min={0}
+              max={100}
+              step={1}
+              onChange={setModel}
             />
           </div>
 
@@ -198,14 +204,18 @@ export default function ScoreExplainer() {
             </span>
 
             <div className={`${mono.className} text-[15px] leading-7`} style={{ color: C.muted }}>
-              community factor = <span className="font-medium" style={{ color: C.ink }}>{communityFactor.toFixed(2)}</span>
-              <br />${eal} &times; {communityFactor.toFixed(2)} ={' '}
-              <span className="font-medium" style={{ color: C.ink }}>{Math.round(raw)}</span>
+              {SCORE_WEIGHTS.historical / 100} &times; {historical} ={' '}
+              <span className="font-medium" style={{ color: C.ink }}>{parts.historical.toFixed(1)}</span>
+              <br />+ {SCORE_WEIGHTS.live / 100} &times; {live} ={' '}
+              <span className="font-medium" style={{ color: C.ink }}>{parts.live.toFixed(1)}</span>
+              <br />+ {SCORE_WEIGHTS.wildfireModel / 100} &times; {model} ={' '}
+              <span className="font-medium" style={{ color: C.ink }}>{parts.model.toFixed(1)}</span>
               <br />score = <span className="font-medium" style={{ color: C.ink }}>{rounded}</span> / 100
             </div>
 
             <p className="m-0 text-[13.5px] leading-relaxed" style={{ color: C.muted }}>
-              A simplified version for learning. FEMA&rsquo;s method ranks every county against all others nationally.
+              Simplified to one hazard. With several, history and live conditions are blended for each hazard
+              first, and the hazards are combined weighted toward the worst one before the wildfire model is added.
             </p>
           </div>
         </div>

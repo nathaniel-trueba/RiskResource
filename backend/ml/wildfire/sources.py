@@ -329,7 +329,7 @@ def power_cell(lat: np.ndarray, lon: np.ndarray) -> tuple[np.ndarray, np.ndarray
         lon: Longitudes (array-like), same length.
     Returns:
         (cell_lat, cell_lon) arrays of cell-center coordinates.
-    Called by: build_dataset.build. Use it in step 2 to map counties onto cells.
+    Called by: build_dataset.build. Its cells are reused by predict_week.py.
     """
     return (
         np.round(np.asarray(lat) / POWER_LAT_STEP) * POWER_LAT_STEP,
@@ -378,8 +378,8 @@ def fetch_power_cell(
         entry, with POWER's -999 fill values replaced by NaN.
     Raises:
         httpx.HTTPError: If every attempt fails.
-    Called by: download_power_cells. Step 2 can call it with a recent start and end
-    for the observed days before a live week.
+    Called by: download_power_cells. predict_week.fetch_power calls it with a recent
+    start and end for the observed days before a live week.
     """
     data = _get_json(
         client,

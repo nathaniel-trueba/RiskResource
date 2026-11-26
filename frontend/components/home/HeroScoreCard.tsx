@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchCounty } from '@/lib/api';
 import { HAZARD_COLORS } from '@/lib/riskColors';
+import { SCORE_WEIGHTS } from '@/lib/scoring';
 import { CountyRecord } from '@/lib/types';
 
 // Preset locations, each with the county the backend scores it by.
@@ -137,6 +138,14 @@ export default function HeroScoreCard() {
           </div>
         ))}
       </div>
+
+      {/* Wildfire model share of the overall score */}
+      {county?.wildfireModel && (
+        <p className="-mt-3 mb-5 text-xs text-gray-500 dark:text-gray-400">
+          Includes the wildfire model ({county.wildfireModel.score}/100 this week) at{' '}
+          {SCORE_WEIGHTS.wildfireModel}% of the score.
+        </p>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-5 border-t border-[#e5e0d5] dark:border-white/10">

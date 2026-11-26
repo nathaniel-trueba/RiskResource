@@ -23,7 +23,7 @@ Each hazard's sub-score will be built from two parts:
 | Baseline | Static, long-term data | FEMA National Risk Index, terrain, distance to faults and flood zones |
 | Live | Real-time public feeds | Nearby active fires, river levels vs. flood stage, recent earthquakes, active weather alerts |
 
-The composite score will be a weighted blend of the four sub-scores. Keeping the baseline and live parts separate is intended to make each score explainable.
+The overall threat score is 40% historical baseline, 40% live signal and 20% a wildfire ignition model (see [`backend/README.md`](backend/README.md)), so it leans toward wildfire risk by design. Keeping the parts separate is intended to make each score explainable.
 
 The project will start with a rule-based score. The team will then train a machine learning model on historical data to estimate baseline risk, and will only use it if it performs better than the rules on held-out regions.
 

@@ -6,11 +6,12 @@ import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
 import ScoreExplainer from '@/components/about/ScoreExplainer';
 import { NRI_HAZARDS_EXCLUDED, NRI_HAZARDS_INCLUDED } from '@/lib/nri';
+import { SCORE_WEIGHTS } from '@/lib/scoring';
 
 interface DataSource {
   name: string;
   agency: string;
-  type: 'Baseline (Static)' | 'Live Telemetry';
+  type: 'Baseline (Static)' | 'Live Telemetry' | 'Weekly Model';
   cadence: string;
   resolution: string;
   description: string;
@@ -35,8 +36,18 @@ const DATA_SOURCES: DataSource[] = [
     cadence: 'Refreshed when we rebuild the baseline',
     resolution: 'County',
     description:
-      'Every federal disaster declaration since 2006, by county and incident type. Counting distinct declarations per hazard gives the historical half of each risk score.',
+      'Every federal disaster declaration since 2006, by county and incident type. Counting distinct declarations per hazard gives the historical part of each risk score.',
     link: 'https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2',
+  },
+  {
+    name: 'Wildfire Ignition Model',
+    agency: 'MTBS / NASA POWER',
+    type: 'Weekly Model',
+    cadence: 'Weekly (every Monday)',
+    resolution: 'County',
+    description:
+      'Our XGBoost model of the weekly chance that a large wildfire (about 1,000+ acres in the West, 500+ in the East) starts in each county. Trained on MTBS fire records and NASA POWER weather from 2010 to 2018, calibrated on 2019 and 2020, and tested on 2021 to 2024. It makes up 20% of the overall score.',
+    link: 'https://www.mtbs.gov/',
   },
   {
     name: 'Real-Time Seismic Network',
@@ -90,7 +101,8 @@ export default function AboutDataPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
             Hazard risk information is scattered across disparate agency databases built for research,
             not for everyday residents asking <em>&ldquo;how worried should I be about my home right now?&rdquo;</em>{' '}
-            Risk Resource synthesizes historical baselines with real-time physical telemetry.
+            Risk Resource synthesizes historical baselines with real-time physical telemetry and a weekly
+            wildfire forecast model.
           </p>
         </section>
 
@@ -101,15 +113,21 @@ export default function AboutDataPage() {
               Architecture
             </span>
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">How the score is built</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-xl">
-              Each hazard is calculated as an isolated 0 to 100 sub-score split into two distinct, explainable components.
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
+              The overall 0 to 100 threat score has three explainable parts: {SCORE_WEIGHTS.historical}%
+              history, {SCORE_WEIGHTS.live}% live conditions and {SCORE_WEIGHTS.wildfireModel}% a wildfire
+              model. History and live conditions are blended inside each hazard&apos;s own score, so every
+              hazard bar is half history and half live. The hazards are then combined, weighted toward the
+              worst one (60% the highest score plus 40% the average of the top three), and the wildfire model
+              is added on top. Because only wildfire gets a model of its own, the overall score leans toward
+              wildfire risk by design.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#f7f5ef] dark:bg-[#161411] p-6 rounded-2xl border border-[#ece4d0] dark:border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-[#f7f5ef] dark:bg-[#161411] p-6 rounded-2xl border border-[#ece4d0] dark:border-white/10">
             <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
               <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60 font-semibold">
-                50% Static Baseline
+                {SCORE_WEIGHTS.historical}% Historical Baseline
               </span>
               <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Long-Term Exposure</h3>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
@@ -119,11 +137,25 @@ export default function AboutDataPage() {
 
             <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
               <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60 font-semibold">
-                50% Live Multiplier
+                {SCORE_WEIGHTS.live}% Live Conditions
               </span>
               <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Real-Time Telemetry</h3>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
                 Injected from hourly NWS alert polygons, HRRR wind gusts (&gt;40 mph), live river stages vs. flood crest, and USGS seismic events.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
+              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60 font-semibold">
+                {SCORE_WEIGHTS.wildfireModel}% Wildfire Model
+              </span>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Weekly Ignition Forecast</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
+                A machine-learning model trained on large wildfires since 2010 estimates the chance one
+                starts in the county this week, from recent heat, dryness and rain, the week&apos;s forecast
+                and local fire history. That chance is scored on a log scale: 0.01% scores 0, 0.1% scores
+                33, 1% scores 67 and 10% or more scores 100. When the model has no forecast for an area, the
+                score uses history and live conditions alone.
               </p>
             </div>
           </div>

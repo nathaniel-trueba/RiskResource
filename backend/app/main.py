@@ -13,13 +13,15 @@ from app.clients.nwps import NwpsClient
 from app.clients.nws import NwsClient
 from app.clients.open_meteo import OpenMeteoClient
 from app.clients.usgs import UsgsClient
-from app.config import get_settings
+from app.config import BACKEND_DIR, get_settings
 from app.core.cache import TTLCache
 from app.db import connect, initialize
 from app.routers import counties, health, map_values, search, states
 from app.services.reference import ReferenceData
 from app.services.risk import RiskService
 from app.services.search import SearchService
+from app.services.wildfire_model import WildfireModelSource
+from weekly_scores import open_store
 
 logging.basicConfig(level=logging.INFO)
 # httpx logs every request at INFO. Failed upstream calls are logged by the cache.
@@ -71,6 +73,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             UsgsClient(http),
             NwpsClient(http),
             open_meteo,
+            WildfireModelSource(
+                open_store(settings.wildfire_model_uri, base_dir=BACKEND_DIR),
+                settings.wildfire_model_max_age_days,
+            ),
         )
         app.state.search_service = SearchService(settings, cache, reference, open_meteo)
 

@@ -17,6 +17,7 @@ from app.domain.scoring import (
     LiveSignal,
     composite_score,
     hazard_score,
+    overall_score,
     tier_for,
     wildfire_weather_score,
     wind_score,
@@ -29,9 +30,12 @@ from app.schemas import (
     MapValue,
     StateExpectedLoss,
     StateRecord,
+    WildfireModelInfo,
 )
 from app.services.reference import County, CountyLosses, ReferenceData, State, StateLosses
-from app.services.snapshot import Snapshot, alert_importance, build_snapshot, merge_signal
+from app.services.alert_archive import load_archived_alerts
+from app.services.snapshot import Snapshot, alert_importance, archive_note, build_snapshot, merge_signal
+from app.services.wildfire_model import WildfireModelSource
 
 NWS_KEY = "nws:alerts"
 USGS_KEY = "usgs:recent"
@@ -85,6 +89,7 @@ class RiskService:
         usgs: UsgsClient,
         nwps: NwpsClient,
         open_meteo: OpenMeteoClient,
+        wildfire_model: WildfireModelSource,
     ) -> None:
         """Store the shared dependencies. Holds no per-request state.
 
@@ -96,6 +101,7 @@ class RiskService:
             usgs: Recent earthquakes client.
             nwps: River gauges client.
             open_meteo: Forecast client.
+            wildfire_model: The wildfire model's weekly county scores.
         Called by: main.lifespan at startup.
         """
         self._settings = settings
@@ -105,6 +111,8 @@ class RiskService:
         self._usgs = usgs
         self._nwps = nwps
         self._open_meteo = open_meteo
+        self._wildfire_model = wildfire_model
+        self._alerts_as_of = None  # Set while alerts come from the archive
 
     async def get_snapshot(self) -> Snapshot:
         """Return the national snapshot, rebuilding it once it's older than its TTL.
@@ -177,6 +185,7 @@ class RiskService:
             active_alert_count=len(alerts) if snapshot.nws_available else None,
             primary_alert=_state_primary_alert(snapshot, state, alerts),
             hazards=self._state_hazards(snapshot, state),
+            wildfire_model=_model_info(snapshot, snapshot.state_model.get(code), None),
             expected_loss=self._state_expected_loss(code),
         )
 
@@ -218,13 +227,14 @@ class RiskService:
                 name=hazard.label,
                 score=score,
                 tier=tier_for(score),
-                warning=self._county_warning(county, hazard, signals, unavailable),
+                warning=self._county_warning(county, hazard, signals, unavailable, snapshot),
             )
             for hazard, score in scores.items()
         ]
         hazards.sort(key=lambda h: h.score, reverse=True)
 
-        composite = composite_score(scores.values())
+        model_score = snapshot.county_model.get(fips)
+        composite = overall_score(composite_score(scores.values()), model_score)
         return CountyRecord(
             name=county.name,
             state=self._reference.states[county.state_code].name,
@@ -235,6 +245,11 @@ class RiskService:
             pop=_format_population(county.population),
             active_alert=_county_active_alert(snapshot, county),
             hazards=hazards,
+            wildfire_model=_model_info(
+                snapshot,
+                model_score,
+                snapshot.model.probabilities.get(fips) if snapshot.model else None,
+            ),
             expected_loss=self._county_expected_loss(fips),
         )
 
@@ -242,7 +257,8 @@ class RiskService:
         """Summarize the cache state of each upstream source.
 
         Returns:
-            {"nws": ..., "usgs": ..., "openMeteo": ..., "nwps": ...}, each a TTLCache.status().
+            {"nws": ..., "usgs": ..., "openMeteo": ..., "nwps": ...}, each a TTLCache.status(),
+            plus "wildfireModel", a WildfireModelSource.status().
         Called by: routers/health.health.
         """
         return {
@@ -250,13 +266,19 @@ class RiskService:
             "usgs": self._cache.status(USGS_KEY),
             "openMeteo": self._cache.status(WEATHER_PREFIX),
             "nwps": self._cache.status(GAUGES_PREFIX),
+            "wildfireModel": self._wildfire_model.status(),
+            # Non-null while NWS is down and alerts come from the Lambda's archive
+            "nwsArchiveAsOf": self._alerts_as_of.isoformat() if self._alerts_as_of else None,
         }
 
     async def _build_snapshot(self) -> Snapshot:
         """Fetch the national feeds and compute a new snapshot.
 
         A feed that's unavailable is passed as None, and its hazards score from the
-        baseline alone.
+        baseline alone, except that NWS falls back to the Lambda's alert archive
+        (services/alert_archive.py) when its last run is recent. The wildfire model
+        document is checked for changes each time, so
+        a new week is picked up within one snapshot TTL.
 
         Returns:
             A new Snapshot.
@@ -267,7 +289,17 @@ class RiskService:
             self._optional(NWS_KEY, self._nws.fetch_active_alerts, ttl),
             self._optional(USGS_KEY, self._usgs.fetch_recent_quakes, ttl),
         )
-        return build_snapshot(self._reference, alerts, quakes)
+        # NWS is down and the cache has nothing recent: try the Lambda's archive.
+        alerts_as_of = None
+        if alerts is None and self._settings.database_url:
+            archived = await asyncio.to_thread(load_archived_alerts, self._settings)
+            if archived is not None:
+                alerts, alerts_as_of = archived.alerts, archived.as_of
+        self._alerts_as_of = alerts_as_of
+        # A version check, plus one small read when it changed. In a thread because
+        # the store may be S3.
+        model = await asyncio.to_thread(self._wildfire_model.current)
+        return build_snapshot(self._reference, alerts, quakes, model, alerts_as_of)
 
     async def _conditions_for(self, county: County) -> Conditions | None:
         """Return a county's forecast summary, cached per county.
@@ -321,6 +353,7 @@ class RiskService:
         hazard: Hazard,
         signals: dict[Hazard, LiveSignal],
         unavailable: frozenset[Hazard],
+        snapshot: Snapshot,
     ) -> str:
         """Write the explanation line for one of a county's hazards.
 
@@ -329,6 +362,7 @@ class RiskService:
             hazard: The hazard to explain.
             signals: The county's strongest live signal per hazard.
             unavailable: Hazards whose live source is down.
+            snapshot: The current snapshot, to note when alerts come from the archive.
         Returns:
             The live signal's text, or else the baseline text, noting when live data is down.
         Called by: get_county.
@@ -336,7 +370,9 @@ class RiskService:
         if hazard in signals:
             return signals[hazard].text
         text = self._baseline_text(hazard, county.baseline_counts[hazard])
-        return text + LIVE_UNAVAILABLE_SUFFIX if hazard in unavailable else text
+        if hazard in unavailable:
+            return text + LIVE_UNAVAILABLE_SUFFIX
+        return text + _archive_suffix(snapshot, hazard)
 
     def _state_hazards(self, snapshot: Snapshot, state: State) -> list[HazardItem]:
         """Build a state's hazard list from the snapshot.
@@ -391,7 +427,7 @@ class RiskService:
         live_source_down = (
             not snapshot.usgs_available if hazard is Hazard.EARTHQUAKE else not snapshot.nws_available
         )
-        return text + LIVE_UNAVAILABLE_SUFFIX if live_source_down else text
+        return text + LIVE_UNAVAILABLE_SUFFIX if live_source_down else text + _archive_suffix(snapshot, hazard)
 
     def _baseline_text(self, hazard: Hazard, count: int) -> str:
         """Describe a historical count, e.g. "3 federal flood declarations since 2006".
@@ -512,6 +548,47 @@ class RiskService:
             **self._loss_fields(losses),
             high_loss_population_pct=round(pct, 1) if pct is not None else None,
         )
+
+
+def _model_info(
+    snapshot: Snapshot, score: int | None, probability: float | None
+) -> WildfireModelInfo | None:
+    """Describe an area's wildfire model contribution for the API.
+
+    Args:
+        snapshot: The current snapshot, for the model's week.
+        score: The area's model score, or None if it has none.
+        probability: The county's weekly probability (None for states).
+    Returns:
+        A WildfireModelInfo, or None when the model isn't available for the area,
+        in which case the overall score is the hazard composite alone.
+    Called by: RiskService.get_state, RiskService.get_county.
+    """
+    if score is None or snapshot.model is None:
+        return None
+    return WildfireModelInfo(
+        score=score,
+        tier=tier_for(score),
+        probability=probability,
+        week_start=snapshot.model.week_start.isoformat(),
+    )
+
+
+def _archive_suffix(snapshot: Snapshot, hazard: Hazard | None = None) -> str:
+    """Note on alert-based text when the alerts come from the Lambda's archive.
+
+    Args:
+        snapshot: The current snapshot.
+        hazard: The hazard the text is about, or None for alert summaries. Only
+            hazards NWS covers get the note (not earthquake).
+    Returns:
+        " (as of HH:MM UTC; live NWS feed unavailable)", or "" for live alerts.
+    Called by: RiskService._county_warning, RiskService._state_warning,
+    _county_active_alert, _state_primary_alert.
+    """
+    if snapshot.alerts_as_of is None or (hazard is not None and hazard not in _NWS_HAZARDS):
+        return ""
+    return " " + archive_note(snapshot.alerts_as_of)
 
 
 def _plural(count: int, singular: str, plural: str) -> str:
@@ -636,9 +713,10 @@ def _county_active_alert(snapshot: Snapshot, county: County) -> str | None:
         return ALERTS_UNKNOWN_TEXT
     alerts = snapshot.alerts.get(county.fips)
     if not alerts:
-        return None
+        # From the archive, "none" is only known as of its run, so say that.
+        return f"No active alerts {archive_note(snapshot.alerts_as_of)}" if snapshot.alerts_as_of else None
     extra = f" (+{len(alerts) - 1} more)" if len(alerts) > 1 else ""
-    return f"{alerts[0].headline}{extra}"
+    return f"{alerts[0].headline}{extra}{_archive_suffix(snapshot)}"
 
 
 def _unique_alerts(snapshot: Snapshot, state: State) -> list[Alert]:
@@ -672,7 +750,7 @@ def _state_primary_alert(snapshot: Snapshot, state: State, alerts: list[Alert]) 
     if not snapshot.nws_available:
         return ALERTS_UNKNOWN_TEXT
     if not alerts:
-        return None
+        return f"No active alerts {archive_note(snapshot.alerts_as_of)}" if snapshot.alerts_as_of else None
     top_event = max(alerts, key=alert_importance).event
     in_state = set(state.county_fips)
     counties = {
@@ -680,4 +758,4 @@ def _state_primary_alert(snapshot: Snapshot, state: State, alerts: list[Alert]) 
     } & in_state
     others = sum(1 for alert in alerts if alert.event != top_event)
     extra = f" (+{_plural(others, 'other alert', 'other alerts')})" if others else ""
-    return f"{top_event} in {_plural(len(counties), 'county', 'counties')}{extra}"
+    return f"{top_event} in {_plural(len(counties), 'county', 'counties')}{extra}{_archive_suffix(snapshot)}"

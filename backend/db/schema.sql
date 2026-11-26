@@ -116,10 +116,16 @@ CREATE TABLE IF NOT EXISTS public.nri_state_losses (
 );
 
 
--- Upstream API cache -----------------------------------------------------------
--- Tables for storing live upstream responses. The API doesn't use them yet: live
--- feeds are cached in memory (app/core/cache.py).
+-- NWS alert archive -----------------------------------------------------------
+-- Written by the AWS Lambda (aws/lambda_function.py) on a schedule. Two uses:
+--   1. A history of NWS alerts per county, which NWS's API doesn't keep (it only
+--      serves alerts that are active now).
+--   2. A fallback for the API: if it can't reach NWS, it shows the alerts from
+--      the Lambda's last run, labelled with that time (services/alert_archive.py).
+-- Only alerts that cover at least one county are stored, without the raw
+-- response, so a year fits comfortably in Supabase's free 500 MB.
 
+-- Where the Lambda calls upstream APIs. Only the nws_alerts row is used.
 CREATE TABLE IF NOT EXISTS public.api_config (
   name           text PRIMARY KEY,
   base_url       text NOT NULL,
@@ -129,68 +135,40 @@ CREATE TABLE IF NOT EXISTS public.api_config (
   updated_at     timestamptz DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS public.locations (
-  id         bigint PRIMARY KEY,
-  name       text NOT NULL,
-  country    text,
-  admin1     text,
-  latitude   double precision NOT NULL,
-  longitude  double precision NOT NULL,
-  timezone   text,
-  population bigint,
-  fetched_at timestamptz DEFAULT now()
+CREATE TABLE IF NOT EXISTS public.nws_alert_archive (
+  id            text PRIMARY KEY,           -- NWS alert ID. Each update has its own ID
+  event         text NOT NULL,              -- e.g. "Red Flag Warning"
+  severity      text,                       -- Extreme, Severe, Moderate, Minor, Unknown
+  urgency       text,
+  certainty     text,
+  message_type  text,                       -- Alert or Update
+  headline      text,
+  area_desc     text,                       -- NWS's plain-language list of areas
+  county_fips   text[] NOT NULL CHECK (cardinality(county_fips) > 0),
+  sent          timestamptz NOT NULL,       -- When NWS issued it. Retention is measured from this
+  effective     timestamptz,
+  expires       timestamptz,                -- When this message stops being current
+  ends          timestamptz,                -- When the hazard itself is expected to end
+  first_seen_at timestamptz NOT NULL,       -- First Lambda run that saw it
+  last_seen_at  timestamptz NOT NULL        -- Latest Lambda run that saw it active
 );
+CREATE INDEX IF NOT EXISTS nws_alert_archive_sent_idx ON public.nws_alert_archive (sent);
+CREATE INDEX IF NOT EXISTS nws_alert_archive_last_seen_idx ON public.nws_alert_archive (last_seen_at);
+CREATE INDEX IF NOT EXISTS nws_alert_archive_county_idx ON public.nws_alert_archive USING gin (county_fips);
 
-CREATE TABLE IF NOT EXISTS public.weather_observations (
-  location_id    bigint NOT NULL REFERENCES public.locations (id),
-  observed_at    timestamptz NOT NULL,
-  temperature_2m double precision,
-  wind_speed_10m double precision,
-  fetched_at     timestamptz DEFAULT now(),
-  PRIMARY KEY (location_id, observed_at)
+-- One row per archive. Edit retention_days in Supabase's Table Editor to change
+-- how long alerts are kept; the Lambda deletes older ones at the end of each run.
+-- last_run_at is the Lambda's last successful run, which the API's fallback uses
+-- to tell "no alerts" from "the Lambda stopped".
+CREATE TABLE IF NOT EXISTS public.archive_settings (
+  table_name     text PRIMARY KEY,
+  retention_days integer NOT NULL CHECK (retention_days BETWEEN 1 AND 3650),
+  last_run_at    timestamptz,
+  updated_at     timestamptz DEFAULT now()
 );
-
-CREATE TABLE IF NOT EXISTS public.earthquakes (
-  id         text PRIMARY KEY,
-  magnitude  double precision,
-  place      text,
-  event_time timestamptz,
-  updated_at timestamptz,
-  latitude   double precision,
-  longitude  double precision,
-  depth_km   double precision,
-  tsunami    boolean,
-  url        text,
-  raw        jsonb,
-  fetched_at timestamptz DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public.weather_alerts (
-  id          text PRIMARY KEY,
-  event       text,
-  severity    text,
-  urgency     text,
-  certainty   text,
-  status      text,
-  headline    text,
-  description text,
-  area_desc   text,
-  sent        timestamptz,
-  effective   timestamptz,
-  expires     timestamptz,
-  raw         jsonb,
-  fetched_at  timestamptz DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public.gauges (
-  lid        text PRIMARY KEY,
-  name       text,
-  state      text,
-  latitude   double precision,
-  longitude  double precision,
-  raw        jsonb,
-  fetched_at timestamptz DEFAULT now()
-);
+INSERT INTO public.archive_settings (table_name, retention_days)
+VALUES ('nws_alert_archive', 365)
+ON CONFLICT (table_name) DO NOTHING;
 
 
 -- Row level security (a no-op on tables that already have it) --------------------
@@ -207,8 +185,5 @@ ALTER TABLE public.nri_county_losses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nri_state_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nri_state_losses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.api_config ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.locations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.weather_observations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.earthquakes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.weather_alerts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.gauges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.nws_alert_archive ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.archive_settings ENABLE ROW LEVEL SECURITY;
