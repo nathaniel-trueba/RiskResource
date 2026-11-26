@@ -1,10 +1,17 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
-@keyframes cycleProgress {
-	0% { width: 0%; }
-	100% { width: 100%; }
+@theme inline {
+  --font-sans: var(--font-dm-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-dm-sans), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+@keyframes cycleProgress {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
 /* Locks the homepage and default routes to Light Mode regardless of OS settings */
 :root {
   color-scheme: light;
@@ -15,7 +22,7 @@
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
