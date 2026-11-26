@@ -5,6 +5,7 @@ import React from 'react';
 import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
 import ScoreExplainer from '@/components/about/ScoreExplainer';
+import NriExplainer from '@/components/about/NriExplainer';
 import { NRI_HAZARDS_EXCLUDED, NRI_HAZARDS_INCLUDED } from '@/lib/nri';
 import { SCORE_WEIGHTS } from '@/lib/scoring';
 
@@ -93,16 +94,17 @@ export default function AboutDataPage() {
             — Methodology & Ingestion Pipelines
           </span>
           <h1 className="text-4xl sm:text-5xl font-normal tracking-tight text-gray-950 dark:text-white leading-tight">
-            About the data, <br />
+            About the data <br />
             <span className="font-semibold text-gray-600 dark:text-gray-400">
-              The science of explainability.
+              From scattered data to one clear score.
             </span>
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
-            Hazard risk information is scattered across disparate agency databases built for research,
-            not for everyday residents asking <em>&ldquo;how worried should I be about my home right now?&rdquo;</em>{' '}
-            Risk Resource synthesizes historical baselines with real-time physical telemetry and a weekly
-            wildfire forecast model.
+            Risk Resource synthesizes natural disaster data from government agencies like FEMA, the National Weather Service and USGS.
+            We organize these large datasets so they serve everyday people wondering, <em>&ldquo;How worried should I be about my home right now?&rdquo;</em> Our
+            threat score combines each county&rsquo;s disaster history since 2006, live warnings and conditions, and a weekly
+            wildfire forecast model. FEMA&rsquo;s estimates of what disasters cost, and how vulnerable and resilient each
+            community is, are shown alongside it.
           </p>
         </section>
 
@@ -212,6 +214,8 @@ export default function AboutDataPage() {
             NRI&apos;s hazards.
           </p>
         </section>
+
+        <NriExplainer />
 
         {/* Agency Ingestion Feeds */}
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10">
