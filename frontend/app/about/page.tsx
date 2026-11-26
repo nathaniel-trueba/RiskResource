@@ -5,12 +5,14 @@ import React from 'react';
 import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
 import ScoreExplainer from '@/components/about/ScoreExplainer';
+// import NriExplainer from '@/components/about/NriExplainer';
 import { NRI_HAZARDS_EXCLUDED, NRI_HAZARDS_INCLUDED } from '@/lib/nri';
+import { SCORE_WEIGHTS } from '@/lib/scoring';
 
 interface DataSource {
   name: string;
   agency: string;
-  type: 'Baseline (Static)' | 'Live Telemetry';
+  type: 'Baseline (Static)' | 'Live Telemetry' | 'Weekly Model';
   cadence: string;
   resolution: string;
   description: string;
@@ -18,6 +20,66 @@ interface DataSource {
 }
 
 const DATA_SOURCES: DataSource[] = [
+  {
+    name: 'Disaster Declarations Summaries',
+    agency: 'OpenFEMA',
+    type: 'Baseline (Static)',
+    cadence: 'Refreshed when we rebuild the baseline',
+    resolution: 'County',
+    description:
+      'Every federal major disaster and fire declaration since 2006, by county and incident type. Ranking counties by distinct declarations per hazard gives the historical part of each hazard score. Emergency declarations and COVID-19 are left out.',
+    link: 'https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2',
+  },
+  {
+    name: 'Earthquake Catalog',
+    agency: 'USGS',
+    type: 'Live Telemetry',
+    cadence: 'Every 5 minutes',
+    resolution: 'Epicenter (latitude and longitude)',
+    description:
+      "Magnitude 3.0+ earthquakes from the past week score a county's live earthquake signal by magnitude and distance (for example M5.5+ within 20 miles). Magnitude 4.5+ earthquakes within 60 miles since 2006 give its earthquake history, where FEMA declarations are too rare to compare counties.",
+    link: 'https://earthquake.usgs.gov/fdsnws/event/1/',
+  },
+  {
+    name: 'Active Weather Alerts',
+    agency: 'NOAA / NWS',
+    type: 'Live Telemetry',
+    cadence: 'Every 5 minutes',
+    resolution: 'County (from each alert’s county codes)',
+    description:
+      "Every active warning, watch and advisory in the US, in one nationwide request. Each alert type we track has a fixed live score, such as Red Flag Warning 100, Flood Warning 85 and Wind Advisory 35. Our AWS Lambda also archives county alerts for a rolling year, as a backup when the live feed is unreachable.",
+    link: 'https://www.weather.gov/documentation/services-web-api',
+  },
+  {
+    name: 'Weather Forecast',
+    agency: 'Open-Meteo',
+    type: 'Live Telemetry',
+    cadence: 'When a county is opened, cached 30 minutes',
+    resolution: 'County center point',
+    description:
+      'The next 24 hours of wind gusts and humidity. An hour with humidity at or below 15% and gusts of 25 mph or more counts as fire weather, and gusts of 40 or 58 mph count as damaging wind. Its daily forecast also supplies the current week for the wildfire model.',
+    link: 'https://open-meteo.com/en/docs',
+  },
+  {
+    name: 'River Gauges',
+    agency: 'NOAA / NWPS',
+    type: 'Live Telemetry',
+    cadence: 'When a county is opened, cached 15 minutes',
+    resolution: 'Individual river gauges in and near the county',
+    description:
+      "Whether rivers are observed or forecast to reach flood stage. Major, moderate and minor flooding score a county's live flood signal at 100, 85 and 70, and the action stage just below flooding scores 40.",
+    link: 'https://water.noaa.gov/',
+  },
+  {
+    name: 'Wildfire Ignition Model',
+    agency: 'MTBS / NASA POWER',
+    type: 'Weekly Model',
+    cadence: 'Weekly (every Monday)',
+    resolution: 'County',
+    description:
+      'Our XGBoost model of the weekly chance that a large wildfire (about 1,000+ acres in the West, 500+ in the East) starts in each county. Trained on MTBS fire records and NASA POWER weather from 2010 to 2018, calibrated on 2019 and 2020, and tested on 2021 to 2024. It makes up 20% of the overall score.',
+    link: 'https://www.mtbs.gov/',
+  },
   {
     name: 'National Risk Index (NRI)',
     agency: 'FEMA',
@@ -29,44 +91,55 @@ const DATA_SOURCES: DataSource[] = [
     link: 'https://hazards.fema.gov/nri/',
   },
   {
-    name: 'Disaster Declarations Summaries',
-    agency: 'OpenFEMA',
+    name: 'County Population Estimates',
+    agency: 'U.S. Census Bureau',
     type: 'Baseline (Static)',
     cadence: 'Refreshed when we rebuild the baseline',
     resolution: 'County',
     description:
-      'Every federal disaster declaration since 2006, by county and incident type. Counting distinct declarations per hazard gives the historical half of each risk score.',
-    link: 'https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2',
+      "Each county's population, used to weight state scores toward where people live and to order search results. Puerto Rico isn't covered, so its municipios are weighted equally.",
+    link: 'https://www.census.gov/programs-surveys/popest.html',
+  },
+];
+
+// Mirrors ALERT_RULES in backend/app/domain/hazards.py and the thresholds in
+// backend/app/domain/scoring.py. Change them together.
+const LIVE_SIGNALS = [
+  {
+    hazard: 'Wildfire',
+    sources: 'NWS fire alerts; Open-Meteo humidity and gusts, next 24 hours',
+    lower: 'Fire Weather Watch 60 · humidity ≤ 15% with gusts ≥ 25 mph in the same hour 80',
+    highest: 'Red Flag Warning or Fire Warning: 100',
   },
   {
-    name: 'Real-Time Seismic Network',
-    agency: 'USGS',
-    type: 'Live Telemetry',
-    cadence: '1 minute (Event-driven)',
-    resolution: 'Geographic coordinate (Lat/Lon)',
-    description:
-      'Continuous stream of seismic events, moment magnitudes, epicenter depths, and ShakeMap peak ground acceleration (PGA) decay vectors within distance buffers.',
-    link: 'https://earthquake.usgs.gov/',
+    hazard: 'Severe storm',
+    sources: 'NWS storm, wind and winter alerts; Open-Meteo peak gusts',
+    lower: 'Wind Advisory 35 · gusts ≥ 40 mph 70 · High Wind Warning 75 · Severe Thunderstorm Warning 90',
+    highest: 'Extreme Wind Warning or gusts ≥ 58 mph: 100',
   },
   {
-    name: 'HRRR & NWS Active Alert Polygons',
-    agency: 'NOAA / NWS',
-    type: 'Live Telemetry',
-    cadence: 'Hourly / 15 minutes',
-    resolution: '3 km grid (HRRR)',
-    description:
-      'Mesoscale atmospheric weather modeling for peak wind gusts, sudden precipitation rates, and real-time CAP alert warning polygons (Red Flag, Flash Flood, High Wind).',
-    link: 'https://www.weather.gov/',
+    hazard: 'Flood',
+    sources: 'NWS flood alerts; NOAA river gauges in and near the county',
+    lower: 'Flood Advisory 35 · gauge at action stage 40 · minor flooding 70 · Flood Warning or moderate flooding 85',
+    highest: 'Flash Flood Warning or major river flooding: 100',
   },
   {
-    name: 'Wildland Fire Interagency System',
-    agency: 'NIFC / IRWIN',
-    type: 'Live Telemetry',
-    cadence: 'Hourly to Daily',
-    resolution: 'Active Perimeter Polygons',
-    description:
-      'Active fire incident perimeters, containment percentages, and thermal satellite hotspot detections (VIIRS / MODIS) evaluating proximity risk.',
-    link: 'https://www.nifc.gov/',
+    hazard: 'Hurricane',
+    sources: 'NWS tropical and storm surge alerts',
+    lower: 'Tropical Storm Watch 50 · Tropical Storm Warning 75 · Storm Surge Warning 90',
+    highest: 'Hurricane Warning: 100',
+  },
+  {
+    hazard: 'Tornado',
+    sources: 'NWS tornado alerts',
+    lower: 'Tornado Watch 65',
+    highest: 'Tornado Warning: 100',
+  },
+  {
+    hazard: 'Earthquake',
+    sources: 'USGS earthquakes from the past 7 days',
+    lower: 'M3.0+ within 30 mi 45 · M4.5+ within 30 mi 75',
+    highest: 'M5.5+ within 20 mi: 100',
   },
 ];
 
@@ -78,38 +151,37 @@ export default function AboutDataPage() {
       <main className="w-full flex-grow">
         {/* Header Hero Section */}
         <section className="max-w-5xl mx-auto px-6 pt-16 pb-12">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-gray-500 dark:text-gray-400 block mb-3">
-            — Methodology & Ingestion Pipelines
-          </span>
           <h1 className="text-4xl sm:text-5xl font-normal tracking-tight text-gray-950 dark:text-white leading-tight">
             About the data <br />
-            <span className="font-semibold text-gray-600 dark:text-gray-400">
-              From scattered data to one clear score.
-            </span>
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
-            Risk Resource synthesizes natural disaster data from government agencies like FEMA, the National Weather Service and USGS. 
-            We organize these large datasets so they serve everyday people wondering, <em>&ldquo;How worried should I be about my home right now?&rdquo;</em> Our 
-            risk score measures the financial cost of disasters, social vulnerability, and community resilience, based on FEMA&rsquo;s records of past disasters across the country.
+            Risk Resource synthesizes natural disaster data from government agencies like FEMA, the National Weather Service and USGS.
+            We organize these large datasets so they serve everyday people wondering, <em>&ldquo;How worried should I be about my home right now?&rdquo;</em> Our
+            threat score combines each county&rsquo;s disaster history since 2006, live warnings and conditions, and a weekly
+            wildfire forecast model. FEMA&rsquo;s estimates of what disasters cost, and how vulnerable and resilient each
+            community is, are shown alongside it.
           </p>
         </section>
 
         {/* Scoring Architecture Schematic */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-6">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
-              Architecture
-            </span>
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">How the score is built</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-xl">
-              Each hazard is calculated as an isolated 0 to 100 sub-score split into two distinct, explainable components.
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
+              The overall 0 to 100 threat score has three explainable parts: {SCORE_WEIGHTS.historical}%
+              history, {SCORE_WEIGHTS.live}% live conditions and {SCORE_WEIGHTS.wildfireModel}% a wildfire
+              model. History and live conditions are blended inside each hazard&apos;s own score, so every
+              hazard bar is half history and half live. The hazards are then combined, weighted toward the
+              worst one (60% the highest score plus 40% the average of the top three), and the wildfire model
+              is added on top. Because only wildfire gets a model of its own, the overall score leans toward
+              wildfire risk by design.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#f7f5ef] dark:bg-[#161411] p-6 rounded-2xl border border-[#ece4d0] dark:border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-[#f7f5ef] dark:bg-[#161411] p-6 rounded-2xl border border-[#ece4d0] dark:border-white/10">
             <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
               <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60 font-semibold">
-                50% Static Baseline
+                {SCORE_WEIGHTS.historical}% Historical Baseline
               </span>
               <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Long-Term Exposure</h3>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
@@ -119,11 +191,25 @@ export default function AboutDataPage() {
 
             <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
               <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60 font-semibold">
-                50% Live Multiplier
+                {SCORE_WEIGHTS.live}% Live Conditions
               </span>
               <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Real-Time Telemetry</h3>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
                 Injected from hourly NWS alert polygons, HRRR wind gusts (&gt;40 mph), live river stages vs. flood crest, and USGS seismic events.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
+              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60 font-semibold">
+                {SCORE_WEIGHTS.wildfireModel}% Wildfire Model
+              </span>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Weekly Ignition Forecast</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
+                A machine-learning model trained on large wildfires since 2010 estimates the chance one
+                starts in the county this week, from recent heat, dryness and rain, the week&apos;s forecast
+                and local fire history. That chance is scored on a log scale: 0.01% scores 0, 0.1% scores
+                33, 1% scores 67 and 10% or more scores 100. When the model has no forecast for an area, the
+                score uses history and live conditions alone.
               </p>
             </div>
           </div>
@@ -134,9 +220,6 @@ export default function AboutDataPage() {
         {/* Expected annual loss */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-6">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
-              Losses
-            </span>
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">Expected annual loss</h2>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
               Dollar figures come straight from FEMA&apos;s National Risk Index (December 2025). They
@@ -181,13 +264,12 @@ export default function AboutDataPage() {
           </p>
         </section>
 
+        {/* <NriExplainer /> */}
+
         {/* Agency Ingestion Feeds */}
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-8">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
-              Pipelines
-            </span>
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Federal Data Sources</h2>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Data Sources</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -230,52 +312,32 @@ export default function AboutDataPage() {
         {/* Data Dictionary Table */}
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10 mb-12">
           <div className="mb-6">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
-              Dictionary
-            </span>
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Telemetry Variables & Units</h2>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live signals and how they score</h2>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
+              Each hazard&apos;s live score (0 to 100) is its strongest current signal, and it&apos;s half of that
+              hazard&apos;s score. With nothing happening, the live score is 0. These are the rules in our backend.
+            </p>
           </div>
 
           <div className="overflow-x-auto bg-white dark:bg-[#181613] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xs">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#211e1a] font-mono text-gray-500 dark:text-gray-400 text-[11px]">
-                  <th className="p-3.5">Hazard Pod</th>
-                  <th className="p-3.5">Live Parameter</th>
-                  <th className="p-3.5">Unit</th>
-                  <th className="p-3.5">Advisory Threshold</th>
-                  <th className="p-3.5">Critical Severity</th>
+                  <th className="p-3.5">Hazard</th>
+                  <th className="p-3.5">Live sources</th>
+                  <th className="p-3.5">Lower live scores</th>
+                  <th className="p-3.5">Highest live score</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-white/10 font-mono text-gray-700 dark:text-gray-300">
-                <tr>
-                  <td className="p-3.5 font-bold text-gray-900 dark:text-white">Wildfire</td>
-                  <td className="p-3.5">Wind &times; (100 - RH)</td>
-                  <td className="p-3.5">Compound Index</td>
-                  <td className="p-3.5">RH &le; 15% &amp; Gusts &ge; 25 mph</td>
-                  <td className="p-3.5 text-rose-700 dark:text-rose-400 font-semibold">Red Flag / Perimeter &lt; 5 mi</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-bold text-gray-900 dark:text-white">Severe Weather</td>
-                  <td className="p-3.5">Peak Wind Gusts</td>
-                  <td className="p-3.5">mph</td>
-                  <td className="p-3.5">40 mph (NWS Advisory)</td>
-                  <td className="p-3.5 text-rose-700 dark:text-rose-400 font-semibold">&ge; 58 mph (Structural Shock)</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-bold text-gray-900 dark:text-white">Flood</td>
-                  <td className="p-3.5">Gauge vs. Flood Stage</td>
-                  <td className="p-3.5">ft / discharge</td>
-                  <td className="p-3.5">Action Stage (+0.0 ft)</td>
-                  <td className="p-3.5 text-rose-700 dark:text-rose-400 font-semibold">Major Flood Crest (+3.5 ft)</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-bold text-gray-900 dark:text-white">Earthquake</td>
-                  <td className="p-3.5">Distance-decayed PGA</td>
-                  <td className="p-3.5">%g / MMI</td>
-                  <td className="p-3.5">M &ge; 3.0 within 30 mi</td>
-                  <td className="p-3.5 text-rose-700 dark:text-rose-400 font-semibold">M &ge; 5.5 within 20 mi</td>
-                </tr>
+              <tbody className="divide-y divide-gray-100 dark:divide-white/10 text-gray-700 dark:text-gray-300">
+                {LIVE_SIGNALS.map((row) => (
+                  <tr key={row.hazard}>
+                    <td className="p-3.5 font-bold text-gray-900 dark:text-white">{row.hazard}</td>
+                    <td className="p-3.5">{row.sources}</td>
+                    <td className="p-3.5 font-mono">{row.lower}</td>
+                    <td className="p-3.5 font-mono text-rose-700 dark:text-rose-400 font-semibold">{row.highest}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
