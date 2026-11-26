@@ -15,7 +15,7 @@ const FEATURES = [
     num: '02',
     title: 'See your biggest hazards',
     description:
-      'Every county ranks its hazards by expected annual damage, so you know what to prepare for first.',
+      'Every county ranks its six hazards by threat score and explains what drives each one, so you know what to prepare for first.',
     linkLabel: 'See an example →',
     href: '/map?fips=06065',
   },
@@ -23,7 +23,7 @@ const FEATURES = [
     num: '03',
     title: 'Live hazard alerts',
     description:
-      'Active fires, flood gauges and weather warnings layered over long-term risk.',
+      'Weather warnings, recent earthquakes, river gauges and forecast winds, layered over long-term risk.',
     linkLabel: 'Check live conditions →',
     href: '/map',
   },
@@ -31,7 +31,7 @@ const FEATURES = [
     num: '04',
     title: 'Built on public data',
     description:
-      "Scores and loss estimates come from FEMA's National Risk Index, with every source listed.",
+      'Scores combine FEMA disaster records, live NWS, USGS and NOAA data, and our wildfire model. Loss estimates come from FEMA. Every source is listed.',
     linkLabel: 'How the data works →',
     href: '/about',
   },

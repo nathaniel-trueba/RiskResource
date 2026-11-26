@@ -21,24 +21,54 @@ interface DataSource {
 
 const DATA_SOURCES: DataSource[] = [
   {
-    name: 'National Risk Index (NRI)',
-    agency: 'FEMA',
-    type: 'Baseline (Static)',
-    cadence: 'Periodic releases (December 2025 in use)',
-    resolution: 'County (Connecticut by planning region)',
-    description:
-      "Modeled expected annual loss in dollars, plus social vulnerability and community resilience ratings. We use its losses for the 11 of its 18 hazards that match ours, for the map's loss measures and the Expected Annual Loss panels. It isn't part of the risk score.",
-    link: 'https://hazards.fema.gov/nri/',
-  },
-  {
     name: 'Disaster Declarations Summaries',
     agency: 'OpenFEMA',
     type: 'Baseline (Static)',
     cadence: 'Refreshed when we rebuild the baseline',
     resolution: 'County',
     description:
-      'Every federal disaster declaration since 2006, by county and incident type. Counting distinct declarations per hazard gives the historical part of each risk score.',
+      'Every federal major disaster and fire declaration since 2006, by county and incident type. Ranking counties by distinct declarations per hazard gives the historical part of each hazard score. Emergency declarations and COVID-19 are left out.',
     link: 'https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2',
+  },
+  {
+    name: 'Earthquake Catalog',
+    agency: 'USGS',
+    type: 'Live Telemetry',
+    cadence: 'Every 5 minutes',
+    resolution: 'Epicenter (latitude and longitude)',
+    description:
+      "Magnitude 3.0+ earthquakes from the past week score a county's live earthquake signal by magnitude and distance (for example M5.5+ within 20 miles). Magnitude 4.5+ earthquakes within 60 miles since 2006 give its earthquake history, where FEMA declarations are too rare to compare counties.",
+    link: 'https://earthquake.usgs.gov/fdsnws/event/1/',
+  },
+  {
+    name: 'Active Weather Alerts',
+    agency: 'NOAA / NWS',
+    type: 'Live Telemetry',
+    cadence: 'Every 5 minutes',
+    resolution: 'County (from each alert’s county codes)',
+    description:
+      "Every active warning, watch and advisory in the US, in one nationwide request. Each alert type we track has a fixed live score, such as Red Flag Warning 100, Flood Warning 85 and Wind Advisory 35. Our AWS Lambda also archives county alerts for a rolling year, as a backup when the live feed is unreachable.",
+    link: 'https://www.weather.gov/documentation/services-web-api',
+  },
+  {
+    name: 'Weather Forecast',
+    agency: 'Open-Meteo',
+    type: 'Live Telemetry',
+    cadence: 'When a county is opened, cached 30 minutes',
+    resolution: 'County center point',
+    description:
+      'The next 24 hours of wind gusts and humidity. An hour with humidity at or below 15% and gusts of 25 mph or more counts as fire weather, and gusts of 40 or 58 mph count as damaging wind. Its daily forecast also supplies the current week for the wildfire model.',
+    link: 'https://open-meteo.com/en/docs',
+  },
+  {
+    name: 'River Gauges',
+    agency: 'NOAA / NWPS',
+    type: 'Live Telemetry',
+    cadence: 'When a county is opened, cached 15 minutes',
+    resolution: 'Individual river gauges in and near the county',
+    description:
+      "Whether rivers are observed or forecast to reach flood stage. Major, moderate and minor flooding score a county's live flood signal at 100, 85 and 70, and the action stage just below flooding scores 40.",
+    link: 'https://water.noaa.gov/',
   },
   {
     name: 'Wildfire Ignition Model',
@@ -51,34 +81,65 @@ const DATA_SOURCES: DataSource[] = [
     link: 'https://www.mtbs.gov/',
   },
   {
-    name: 'Real-Time Seismic Network',
-    agency: 'USGS',
-    type: 'Live Telemetry',
-    cadence: '1 minute (Event-driven)',
-    resolution: 'Geographic coordinate (Lat/Lon)',
+    name: 'National Risk Index (NRI)',
+    agency: 'FEMA',
+    type: 'Baseline (Static)',
+    cadence: 'Periodic releases (December 2025 in use)',
+    resolution: 'County (Connecticut by planning region)',
     description:
-      'Continuous stream of seismic events, moment magnitudes, epicenter depths, and ShakeMap peak ground acceleration (PGA) decay vectors within distance buffers.',
-    link: 'https://earthquake.usgs.gov/',
+      "Modeled expected annual loss in dollars, plus social vulnerability and community resilience ratings. We use its losses for the 11 of its 18 hazards that match ours, for the map's loss measures and the Expected Annual Loss panels. It isn't part of the risk score.",
+    link: 'https://hazards.fema.gov/nri/',
   },
   {
-    name: 'HRRR & NWS Active Alert Polygons',
-    agency: 'NOAA / NWS',
-    type: 'Live Telemetry',
-    cadence: 'Hourly / 15 minutes',
-    resolution: '3 km grid (HRRR)',
+    name: 'County Population Estimates',
+    agency: 'U.S. Census Bureau',
+    type: 'Baseline (Static)',
+    cadence: 'Refreshed when we rebuild the baseline',
+    resolution: 'County',
     description:
-      'Mesoscale atmospheric weather modeling for peak wind gusts, sudden precipitation rates, and real-time CAP alert warning polygons (Red Flag, Flash Flood, High Wind).',
-    link: 'https://www.weather.gov/',
+      "Each county's population, used to weight state scores toward where people live and to order search results. Puerto Rico isn't covered, so its municipios are weighted equally.",
+    link: 'https://www.census.gov/programs-surveys/popest.html',
+  },
+];
+
+// Mirrors ALERT_RULES in backend/app/domain/hazards.py and the thresholds in
+// backend/app/domain/scoring.py. Change them together.
+const LIVE_SIGNALS = [
+  {
+    hazard: 'Wildfire',
+    sources: 'NWS fire alerts; Open-Meteo humidity and gusts, next 24 hours',
+    lower: 'Fire Weather Watch 60 · humidity ≤ 15% with gusts ≥ 25 mph in the same hour 80',
+    highest: 'Red Flag Warning or Fire Warning: 100',
   },
   {
-    name: 'Wildland Fire Interagency System',
-    agency: 'NIFC / IRWIN',
-    type: 'Live Telemetry',
-    cadence: 'Hourly to Daily',
-    resolution: 'Active Perimeter Polygons',
-    description:
-      'Active fire incident perimeters, containment percentages, and thermal satellite hotspot detections (VIIRS / MODIS) evaluating proximity risk.',
-    link: 'https://www.nifc.gov/',
+    hazard: 'Severe storm',
+    sources: 'NWS storm, wind and winter alerts; Open-Meteo peak gusts',
+    lower: 'Wind Advisory 35 · gusts ≥ 40 mph 70 · High Wind Warning 75 · Severe Thunderstorm Warning 90',
+    highest: 'Extreme Wind Warning or gusts ≥ 58 mph: 100',
+  },
+  {
+    hazard: 'Flood',
+    sources: 'NWS flood alerts; NOAA river gauges in and near the county',
+    lower: 'Flood Advisory 35 · gauge at action stage 40 · minor flooding 70 · Flood Warning or moderate flooding 85',
+    highest: 'Flash Flood Warning or major river flooding: 100',
+  },
+  {
+    hazard: 'Hurricane',
+    sources: 'NWS tropical and storm surge alerts',
+    lower: 'Tropical Storm Watch 50 · Tropical Storm Warning 75 · Storm Surge Warning 90',
+    highest: 'Hurricane Warning: 100',
+  },
+  {
+    hazard: 'Tornado',
+    sources: 'NWS tornado alerts',
+    lower: 'Tornado Watch 65',
+    highest: 'Tornado Warning: 100',
+  },
+  {
+    hazard: 'Earthquake',
+    sources: 'USGS earthquakes from the past 7 days',
+    lower: 'M3.0+ within 30 mi 45 · M4.5+ within 30 mi 75',
+    highest: 'M5.5+ within 20 mi: 100',
   },
 ];
 
@@ -223,7 +284,7 @@ export default function AboutDataPage() {
             <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
               Pipelines
             </span>
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Federal Data Sources</h2>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Data Sources</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -269,49 +330,32 @@ export default function AboutDataPage() {
             <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
               Dictionary
             </span>
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Telemetry Variables & Units</h2>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live signals and how they score</h2>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
+              Each hazard&apos;s live score (0 to 100) is its strongest current signal, and it&apos;s half of that
+              hazard&apos;s score. With nothing happening, the live score is 0. These are the rules in our backend.
+            </p>
           </div>
 
           <div className="overflow-x-auto bg-white dark:bg-[#181613] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xs">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#211e1a] font-mono text-gray-500 dark:text-gray-400 text-[11px]">
-                  <th className="p-3.5">Hazard Pod</th>
-                  <th className="p-3.5">Live Parameter</th>
-                  <th className="p-3.5">Unit</th>
-                  <th className="p-3.5">Advisory Threshold</th>
-                  <th className="p-3.5">Critical Severity</th>
+                  <th className="p-3.5">Hazard</th>
+                  <th className="p-3.5">Live sources</th>
+                  <th className="p-3.5">Lower live scores</th>
+                  <th className="p-3.5">Highest live score</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-white/10 font-mono text-gray-700 dark:text-gray-300">
-                <tr>
-                  <td className="p-3.5 font-bold text-gray-900 dark:text-white">Wildfire</td>
-                  <td className="p-3.5">Wind &times; (100 - RH)</td>
-                  <td className="p-3.5">Compound Index</td>
-                  <td className="p-3.5">RH &le; 15% &amp; Gusts &ge; 25 mph</td>
-                  <td className="p-3.5 text-rose-700 dark:text-rose-400 font-semibold">Red Flag / Perimeter &lt; 5 mi</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-bold text-gray-900 dark:text-white">Severe Weather</td>
-                  <td className="p-3.5">Peak Wind Gusts</td>
-                  <td className="p-3.5">mph</td>
-                  <td className="p-3.5">40 mph (NWS Advisory)</td>
-                  <td className="p-3.5 text-rose-700 dark:text-rose-400 font-semibold">&ge; 58 mph (Structural Shock)</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-bold text-gray-900 dark:text-white">Flood</td>
-                  <td className="p-3.5">Gauge vs. Flood Stage</td>
-                  <td className="p-3.5">ft / discharge</td>
-                  <td className="p-3.5">Action Stage (+0.0 ft)</td>
-                  <td className="p-3.5 text-rose-700 dark:text-rose-400 font-semibold">Major Flood Crest (+3.5 ft)</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-bold text-gray-900 dark:text-white">Earthquake</td>
-                  <td className="p-3.5">Distance-decayed PGA</td>
-                  <td className="p-3.5">%g / MMI</td>
-                  <td className="p-3.5">M &ge; 3.0 within 30 mi</td>
-                  <td className="p-3.5 text-rose-700 dark:text-rose-400 font-semibold">M &ge; 5.5 within 20 mi</td>
-                </tr>
+              <tbody className="divide-y divide-gray-100 dark:divide-white/10 text-gray-700 dark:text-gray-300">
+                {LIVE_SIGNALS.map((row) => (
+                  <tr key={row.hazard}>
+                    <td className="p-3.5 font-bold text-gray-900 dark:text-white">{row.hazard}</td>
+                    <td className="p-3.5">{row.sources}</td>
+                    <td className="p-3.5 font-mono">{row.lower}</td>
+                    <td className="p-3.5 font-mono text-rose-700 dark:text-rose-400 font-semibold">{row.highest}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
