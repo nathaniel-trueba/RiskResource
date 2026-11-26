@@ -24,6 +24,13 @@ const DATA_FEEDS = [
   },
 ];
 
+const TEAM_MEMBERS = [
+  { name: 'Aditya Davanam', href: 'https://davadoba.github.io', external: true },
+  { name: 'Lilia Maxwell', href: '/', external: false },
+  { name: 'Kevin Li', href: 'https://www.linkedin.com/in/kevinznli/', external: true },
+  { name: 'Nikhita Kadam', href: '/', external: false },
+];
+
 export default function Footer() {
   return (
     <footer className="w-full bg-[#11100e] border-t border-white/10 py-12 px-6">
@@ -106,16 +113,25 @@ export default function Footer() {
             Team
           </h5>
           <ul className="space-y-2 text-xs">
-            {['Aditya Davanam', 'Lilia Maxwell', 'Kevin Li', 'Nikhita Kadam'].map((name) => (
-              <li key={name}>
-                <a
-                  href="#"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {name}
-                </a>
+            {TEAM_MEMBERS.map((member) => (
+              <li key={member.name}>
+                {member.external ? (
+                  <a
+                    href={member.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    {member.name}
+                  </a>
+                ) : (
+                  <Link
+                    href={member.href}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    {member.name}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
