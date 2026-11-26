@@ -12,8 +12,6 @@ import { SCORE_WEIGHTS } from '@/lib/scoring';
 interface DataSource {
   name: string;
   agency: string;
-  type: 'Baseline (Static)' | 'Live Telemetry' | 'Weekly Model';
-  cadence: string;
   resolution: string;
   description: string;
   link: string;
@@ -23,8 +21,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Disaster Declarations Summaries',
     agency: 'OpenFEMA',
-    type: 'Baseline (Static)',
-    cadence: 'Refreshed when we rebuild the baseline',
     resolution: 'County',
     description:
       'Every federal major disaster and fire declaration since 2006, by county and incident type. Ranking counties by distinct declarations per hazard gives the historical part of each hazard score. Emergency declarations and COVID-19 are left out.',
@@ -33,8 +29,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Earthquake Catalog',
     agency: 'USGS',
-    type: 'Live Telemetry',
-    cadence: 'Every 5 minutes',
     resolution: 'Epicenter (latitude and longitude)',
     description:
       "Magnitude 3.0+ earthquakes from the past week score a county's live earthquake signal by magnitude and distance (for example M5.5+ within 20 miles). Magnitude 4.5+ earthquakes within 60 miles since 2006 give its earthquake history, where FEMA declarations are too rare to compare counties.",
@@ -43,8 +37,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Active Weather Alerts',
     agency: 'NOAA / NWS',
-    type: 'Live Telemetry',
-    cadence: 'Every 5 minutes',
     resolution: 'County (from each alert’s county codes)',
     description:
       "Every active warning, watch and advisory in the US, in one nationwide request. Each alert type we track has a fixed live score, such as Red Flag Warning 100, Flood Warning 85 and Wind Advisory 35. Our AWS Lambda also archives county alerts for a rolling year, as a backup when the live feed is unreachable.",
@@ -53,8 +45,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Weather Forecast',
     agency: 'Open-Meteo',
-    type: 'Live Telemetry',
-    cadence: 'When a county is opened, cached 30 minutes',
     resolution: 'County center point',
     description:
       'The next 24 hours of wind gusts and humidity. An hour with humidity at or below 15% and gusts of 25 mph or more counts as fire weather, and gusts of 40 or 58 mph count as damaging wind. Its daily forecast also supplies the current week for the wildfire model.',
@@ -63,8 +53,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'River Gauges',
     agency: 'NOAA / NWPS',
-    type: 'Live Telemetry',
-    cadence: 'When a county is opened, cached 15 minutes',
     resolution: 'Individual river gauges in and near the county',
     description:
       "Whether rivers are observed or forecast to reach flood stage. Major, moderate and minor flooding score a county's live flood signal at 100, 85 and 70, and the action stage just below flooding scores 40.",
@@ -73,8 +61,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Wildfire Ignition Model',
     agency: 'MTBS / NASA POWER',
-    type: 'Weekly Model',
-    cadence: 'Weekly (every Monday)',
     resolution: 'County',
     description:
       'Our XGBoost model of the weekly chance that a large wildfire (about 1,000+ acres in the West, 500+ in the East) starts in each county. Trained on MTBS fire records and NASA POWER weather from 2010 to 2018, calibrated on 2019 and 2020, and tested on 2021 to 2024. It makes up 20% of the overall score.',
@@ -83,8 +69,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'National Risk Index (NRI)',
     agency: 'FEMA',
-    type: 'Baseline (Static)',
-    cadence: 'Periodic releases (December 2025 in use)',
     resolution: 'County (Connecticut by planning region)',
     description:
       "Modeled expected annual loss in dollars, plus social vulnerability and community resilience ratings. We use its losses for the 11 of its 18 hazards that match ours, for the map's loss measures and the Expected Annual Loss panels. It isn't part of the risk score.",
@@ -93,8 +77,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'County Population Estimates',
     agency: 'U.S. Census Bureau',
-    type: 'Baseline (Static)',
-    cadence: 'Refreshed when we rebuild the baseline',
     resolution: 'County',
     description:
       "Each county's population, used to weight state scores toward where people live and to order search results. Puerto Rico isn't covered, so its municipios are weighted equally.",
@@ -279,12 +261,9 @@ export default function AboutDataPage() {
                 className="p-6 bg-white dark:bg-[#181613] border border-gray-200 dark:border-white/10 rounded-2xl flex flex-col justify-between shadow-2xs hover:border-gray-400 dark:hover:border-white/25 transition-colors"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="mb-3">
                     <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-200 font-semibold">
                       {src.agency}
-                    </span>
-                    <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400">
-                      {src.type}
                     </span>
                   </div>
                   <h3 className="text-base font-medium text-gray-950 dark:text-white">{src.name}</h3>
@@ -293,8 +272,7 @@ export default function AboutDataPage() {
                   </p>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-gray-100 dark:border-white/10 flex items-center justify-between text-xs font-mono text-gray-500 dark:text-gray-400">
-                  <span>Sync: {src.cadence}</span>
+                <div className="mt-6 pt-4 border-t border-gray-100 dark:border-white/10 flex items-center justify-end text-xs font-mono text-gray-500 dark:text-gray-400">
                   <a
                     href={src.link}
                     target="_blank"
