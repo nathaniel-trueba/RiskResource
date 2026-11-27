@@ -4,7 +4,6 @@
 import React, { useEffect, useState } from 'react';
 import { CountyRecord } from '@/lib/types';
 import { TIER_STYLES } from '@/lib/riskColors';
-import ExpectedLossSection from '@/components/map/ExpectedLossSection';
 import WildfireModelSection from '@/components/map/WildfireModelSection';
 
 interface Props {
@@ -66,7 +65,7 @@ export default function CountyInspector({ county, onBackToState }: Props) {
           </div>
         </div>
 
-		{/* Live Warning Banner with Expandable Dropdown */}
+        {/* Live Warning Banner with Expandable Dropdown */}
         <div className="mt-4 p-3 bg-amber-50 border border-amber-200/80 rounded-xl">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
             <span className="inline-block w-2 h-2 rounded-full bg-amber-600 animate-pulse" />
@@ -144,11 +143,9 @@ export default function CountyInspector({ county, onBackToState }: Props) {
         </div>
 
         <WildfireModelSection model={county.wildfireModel} />
-
-        <ExpectedLossSection loss={county.expectedLoss} kind="county" stateCode={county.stateCode} />
       </div>
 
-      <div className="pt-4 border-t border-gray-100 text-[10px] text-gray-400 font-mono flex items-center justify-between">
+      <div className="mt-6 pt-4 border-t border-gray-100 text-[10px] text-gray-400 font-mono flex items-center justify-between">
         <span>Scores: FEMA/USGS history, live feeds, wildfire model · Losses: FEMA NRI</span>
         <span className="text-emerald-600 font-semibold">● Active</span>
       </div>

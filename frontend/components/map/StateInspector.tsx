@@ -4,7 +4,6 @@
 import React, { useEffect, useState } from 'react';
 import { StateRecord } from '@/lib/types';
 import { TIER_STYLES } from '@/lib/riskColors';
-import ExpectedLossSection from '@/components/map/ExpectedLossSection';
 import WildfireModelSection from '@/components/map/WildfireModelSection';
 
 interface Props {
@@ -76,7 +75,7 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
           </div>
         </div>
 
-		{/* Primary Alert Callout with Expandable Dropdown */}
+        {/* Primary Alert Callout with Expandable Dropdown */}
         <div className="mt-3 p-3 bg-red-50/80 border border-red-200/70 rounded-xl">
           <span className="text-[10px] font-mono uppercase text-red-900 font-bold block">
             Live Advisory Summary
@@ -157,8 +156,6 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
         </div>
 
         <WildfireModelSection model={stateData.wildfireModel} />
-
-        <ExpectedLossSection loss={stateData.expectedLoss} kind="state" stateCode={stateData.code} />
       </div>
 
       <button
@@ -166,7 +163,7 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
         onClick={onDrillDown}
         className="w-full mt-6 py-3 bg-[#1b232c] hover:bg-black text-white text-xs font-semibold rounded-xl transition-colors shadow-xs cursor-pointer"
       >
-        View county breakdown →
+        Zoom Into Counties →
       </button>
     </aside>
   );
