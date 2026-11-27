@@ -26,9 +26,9 @@ const DATA_FEEDS = [
 
 const TEAM_MEMBERS = [
   { name: 'Aditya Davanam', href: 'https://davadoba.github.io', external: true },
-  { name: 'Lilia Maxwell', href: '/', external: false },
+  { name: 'Lilia Maxwell', href: 'https://www.linkedin.com/in/lilia-maxwell-ab6aa83a2', external: true },
   { name: 'Kevin Li', href: 'https://www.linkedin.com/in/kevinznli/', external: true },
-  { name: 'Nikhita Kadam', href: '/', external: false },
+  { name: 'Nikhita Kadam', href: 'http://www.linkedin.com/in/nikhita-kadam-ba09b6298/', external: true },
 ];
 
 export default function Footer() {
