@@ -19,5 +19,8 @@ uv.lock
 # data
 backend/ml/wildfire/data/
 
+# Typescript Build Artifacts
+*.tsbuildinfo
+
 # # Aditya Temp Files
 # davanam-temp/

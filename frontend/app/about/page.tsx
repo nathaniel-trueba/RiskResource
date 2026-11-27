@@ -292,10 +292,10 @@ export default function AboutDataPage() {
         {/* Data Dictionary Table */}
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10 mb-12">
           <div className="mb-6">
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live signals and how they score</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
-              Each hazard&apos;s live score (0 to 100) is its strongest current signal, and it&apos;s half of that
-              hazard&apos;s score. With nothing happening, the live score is 0. These are the rules in our backend.
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live Signals And How They Score</h2>
+            <p className="text-s text-gray-600 dark:text-gray-400 mt-1 max-w-2.5xl leading-relaxed">
+              Each hazard gets a threat score from 0 to 100.  Live signals from these sources make up half of that score. 
+              If there are no live warnings, the live score is 0. Here is how we evaluate the severity of live warnings:
             </p>
           </div>
 
