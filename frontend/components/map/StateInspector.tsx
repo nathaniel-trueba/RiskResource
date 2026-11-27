@@ -69,10 +69,10 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
           </div>
         </div>
 
-        {/* Primary Alert Callout with Expandable Dropdown */}
+		{/* Primary Alert Callout with Expandable Dropdown */}
         <div className="mt-3 p-3 bg-red-50/80 border border-red-200/70 rounded-xl">
           <span className="text-[10px] font-mono uppercase text-red-900 font-bold block">
-            Current Statewide Focus
+            Live Advisory Summary
           </span>
 
           <div className="text-xs text-red-950 font-medium mt-0.5 leading-snug">

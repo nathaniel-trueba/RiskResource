@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { describeWildfireModel, SCORE_FORMULA, SCORE_WEIGHTS } from '@/lib/scoring';
+import { describeWildfireModel, SCORE_WEIGHTS } from '@/lib/scoring';
 import { WildfireModelInfo } from '@/lib/types';
 
 interface Props {
@@ -14,7 +14,7 @@ export default function WildfireModelSection({ model }: Props) {
   return (
     <div className="mt-6">
       <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 block mb-3 font-semibold">
-        Wildfire Model · {SCORE_WEIGHTS.wildfireModel}% of Score
+        Wildfire Model
       </span>
 
       {model ? (
@@ -40,7 +40,6 @@ export default function WildfireModelSection({ model }: Props) {
         </p>
       )}
 
-      <p className="text-[10px] text-gray-400 mt-2 leading-tight">{SCORE_FORMULA}</p>
     </div>
   );
 }
