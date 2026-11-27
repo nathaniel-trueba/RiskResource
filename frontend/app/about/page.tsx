@@ -191,11 +191,11 @@ export default function AboutDataPage() {
 
       <main className="w-full flex-grow">
         {/* Header Hero Section */}
-        <section className="max-w-5xl mx-auto px-6 pt-16 pb-12">
+		<section className="max-w-5xl mx-auto px-6 pt-16 pb-12">
           <h1 className="text-4xl sm:text-5xl font-normal tracking-tight text-gray-950 dark:text-white leading-tight">
             About the Data
           </h1>
-          <p className="text-xs text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
             Hazard information is scattered across agency sites (NOAA, USGS, FEMA) that were not built
             for a resident asking &ldquo;how worried should I be about my house, right now?&rdquo; Risk
             Resource answers that, combining natural disaster data across government agencies reporting
@@ -402,8 +402,8 @@ export default function AboutDataPage() {
           <div className="mb-6">
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live Signals And How They Score</h2>
             <p className="text-s text-gray-600 dark:text-gray-400 mt-1 max-w-2.5xl leading-relaxed">
-              Each hazard gets a threat score from 0 to 100.  Live sources make up half of it. 
-              If there are no live warnings, the live score is 0. 
+              Each hazard gets a threat score from 0 to 100.  Live sources make up half of it.
+              If there are no live warnings, the live score is 0.
               <br />Here is how we score live signals of varying severity:
             </p>
           </div>
