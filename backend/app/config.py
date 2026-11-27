@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     # Days after the file's weekStart that it still counts. After this, the overall
     # score leaves the model out rather than use an old week's forecast.
     wildfire_model_max_age_days: int = 13
+    # Rebuild the reference data (FEMA, USGS, Census, NRI) once it's this many days
+    # old, checking every reference_check_interval_seconds. 0 turns it off, e.g. for
+    # a local backend that shouldn't reseed the shared database. See
+    # services/reference_refresh.py.
+    reference_max_age_days: int = 30
+    reference_check_interval_seconds: int = 3600
     # Fixed scores for the home page's map animation. See services/home_snapshot.py.
     home_snapshot_dir: str = "data/snapshot"
     # When NWS is unreachable, show alerts from the Lambda's archive if its last run

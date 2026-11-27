@@ -81,6 +81,8 @@ After the first start, each startup costs two quick checks.
 
 After a `--refresh`, commit the new `data/reference.json`, so a fresh database seeds with the same data.
 
+**Automatic refresh.** The running API also refreshes the data itself (`services/reference_refresh.py`). Every `REFERENCE_CHECK_INTERVAL_SECONDS` (an hour, starting a minute after startup), it checks `reference_meta.generated_at`. Once that's more than `REFERENCE_MAX_AGE_DAYS` (30) old, it runs the same build as `--refresh`, reseeds in one transaction, and swaps the new data into the running services, with no restart. A session advisory lock and a second age check stop two processes from both refreshing. If a source fails, nothing is written and the next check tries again. It doesn't rewrite `data/reference.json`: that file only seeds an empty database. `/api/health` reports it under `referenceData` (`generatedAt`, `nextRefreshAfter`, `lastCheck`, `lastRefresh`, `error`). Set `REFERENCE_MAX_AGE_DAYS=0` to turn it off, for example on a local backend that shouldn't reseed the shared database.
+
 ### Configuration
 
 All settings are defined in [`app/config.py`](../backend/app/config.py) and can be overridden in `backend/.env`. [`env.example`](../backend/env.example) lists them. It isn't named `.env.example` because the root `.gitignore` excludes `.env` files.
@@ -95,6 +97,8 @@ All settings are defined in [`app/config.py`](../backend/app/config.py) and can 
 | `MAX_STALE_SECONDS`, `FAILURE_COOLDOWN_SECONDS` | 3600, 60 | Outage handling |
 | `WILDFIRE_MODEL_URI` | `data/wildfire_model.json` (under `backend/`) | Where the weekly wildfire job publishes and the API reads: a path or `s3://bucket/key` ([section 5](#wildfire-model-0-to-100)) |
 | `WILDFIRE_MODEL_MAX_AGE_DAYS` | 13 | Days after the file's `weekStart` that it's still used |
+| `REFERENCE_MAX_AGE_DAYS` | 30 | Rebuild the reference data once it's this old. 0 turns automatic refreshes off |
+| `REFERENCE_CHECK_INTERVAL_SECONDS` | 3600 | How often the API checks the reference data's age |
 
 ## 3. Structure
 
@@ -128,6 +132,8 @@ backend/
       reference.py               Loads reference data from the DB into memory
       snapshot.py                National scores from the nationwide feeds and the wildfire model
       wildfire_model.py          Reads the weekly wildfire model file; re-reads it when it changes
+      reference_refresh.py       Rebuilds and reseeds the reference data once it's REFERENCE_MAX_AGE_DAYS old
+      home_snapshot.py           Fixed state scores for the home page animation (data/snapshot/)
       risk.py                    Builds StateRecord, CountyRecord and MapValue
       search.py                  Resolves text to counties
     clients/                     One file per external API; fetch and parse only
@@ -556,7 +562,7 @@ County IDs come from the same GeoJSON file the frontend draws, so every `MapValu
 ## 10. Known limitations
 
 - **The wildfire model runs on forecast weather.** It was trained on NASA POWER reanalysis, and this week's days come from Open-Meteo's forecast, which has different biases (especially wind and humidity). The scores haven't been validated against forecast inputs yet. Above about 0.3% it also overestimated by about a quarter in 2021-2024 (see the model README).
-- **Nothing schedules the model yet.** Someone has to run `predict_week` each week. Without it, the file goes stale after `WILDFIRE_MODEL_MAX_AGE_DAYS` and the overall score quietly drops back to the hazard composite. `/api/health` shows `wildfireModel.available: false` when that happens.
+- **If the weekly model run fails,** the file goes stale after `WILDFIRE_MODEL_MAX_AGE_DAYS` and the overall score quietly drops back to the hazard composite. `/api/health` shows `wildfireModel.available: false` when that happens. The run is scheduled on AWS every Monday (`aws/wildfire_state_machine.json`).
 - **Baseline is a proxy.** Declarations measure federal response rather than physical risk, and they depend on how FEMA labels events: many tornadoes are filed under "Severe Storm". The NRI losses are a better long-term measure, but they're shown separately and don't feed the score.
 - **Expected loss is modeled and partial.** It leaves out 7 NRI hazards, including heat and drought, and includes a dollar value for deaths and injuries.
 - **Connecticut has no county-level losses,** because NRI reports planning regions.

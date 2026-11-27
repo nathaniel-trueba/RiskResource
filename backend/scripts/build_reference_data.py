@@ -110,7 +110,7 @@ def build() -> dict:
         Data in the reference.json format: {"meta": ..., "states": ..., "counties": ...}.
     Raises:
         httpx.HTTPError: If any source fails.
-    Called by: scripts/init_db.main (--refresh).
+    Called by: scripts/init_db.main (--refresh), app/services/reference_refresh.py.
     """
     settings = get_settings()
     with httpx.Client(headers={"User-Agent": settings.user_agent}, timeout=120) as http:

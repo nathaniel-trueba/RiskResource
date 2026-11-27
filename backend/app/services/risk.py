@@ -115,6 +115,18 @@ class RiskService:
         self._wildfire_model = wildfire_model
         self._alerts_as_of = None  # Set while alerts come from the archive
 
+    def replace_reference(self, reference: ReferenceData) -> None:
+        """Use newly refreshed reference data from now on.
+
+        The cached snapshot was built from the old data and is replaced at its next
+        rebuild, within snapshot_ttl_seconds.
+
+        Args:
+            reference: The new ReferenceData.
+        Called by: main.lifespan's install_reference, after a ReferenceRefresher refresh.
+        """
+        self._reference = reference
+
     async def get_snapshot(self) -> Snapshot:
         """Return the national snapshot, rebuilding it once it's older than its TTL.
 
