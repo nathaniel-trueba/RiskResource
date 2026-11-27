@@ -77,11 +77,11 @@ export default function CountyInspector({ county, onBackToState }: Props) {
           </div>
         </div>
 
-        {/* Live Warning Banner with Expandable Dropdown */}
+		{/* Live Warning Banner with Expandable Dropdown */}
         <div className="mt-4 p-3 bg-amber-50 border border-amber-200/80 rounded-xl">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
             <span className="inline-block w-2 h-2 rounded-full bg-amber-600 animate-pulse" />
-            Live Threat Advisory
+            {alertsList.length > 1 ? 'Live Advisories' : 'Live Advisory'}
           </div>
 
           <div className="text-[11px] text-amber-800 mt-1 leading-snug">

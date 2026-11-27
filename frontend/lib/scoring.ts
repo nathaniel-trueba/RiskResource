@@ -25,7 +25,7 @@ export function formatWeek(weekStart: string): string {
 /** The model's line under a score, e.g. "0.42% chance of a large fire starting · Week of Nov 23". */
 export function describeWildfireModel(model: WildfireModelInfo): string {
   const week = formatWeek(model.weekStart);
-  if (model.probability === undefined) return `${week} · population-weighted across counties`;
+  if (model.probability === undefined) return `${week}`;
   const pct = 100 * model.probability;
   const shown = pct < 0.01 ? '<0.01%' : pct < 1 ? `${pct.toFixed(2)}%` : `${pct.toFixed(1)}%`;
   return `${shown} chance a large wildfire starts this week · ${week}`;
