@@ -14,18 +14,6 @@ const display = Bricolage_Grotesque({ subsets: ['latin'], weight: ['700', '800']
 const body = Public_Sans({ subsets: ['latin'], weight: ['400', '500', '600'] });
 const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'] });
 
-// Prototype palette
-const C = {
-  band: '#F6F1E9', // section background
-  card: '#FFFDF9', // slider card
-  result: '#EEE5D7', // score panel
-  line: '#E3D7C5',
-  ink: '#2A1F16',
-  muted: '#6B5B4B',
-  accent: '#A44A0B',
-  track: '#E6E1DA',
-};
-
 const RING_LENGTH = 263.9; // circumference of the r=42 circle
 
 // The site's tiers, from TIER_FLOORS in backend/app/domain/scoring.py.
@@ -59,13 +47,16 @@ function Slider({ id, label, help, value, display: shown, min, max, step, onChan
   const pct = ((value - min) / (max - min)) * 100;
   return (
     <div>
-      <label htmlFor={id} className="flex items-baseline justify-between gap-3 text-[17px] font-semibold" style={{ color: C.ink }}>
+      <label
+        htmlFor={id}
+        className="flex items-baseline justify-between gap-3 text-[17px] font-semibold text-[#2A1F16] dark:text-white"
+      >
         <span>{label}</span>
-        <span className={`${mono.className} text-[17px] font-medium`} style={{ color: C.accent }}>
+        <span className={`${mono.className} text-[17px] font-medium text-[#A44A0B] dark:text-[#e29b4d]`}>
           {shown}
         </span>
       </label>
-      <p className="mt-1.5 mb-3 text-[15px] leading-relaxed" style={{ color: C.muted }}>
+      <p className="mt-1.5 mb-3 text-[15px] leading-relaxed text-[#6B5B4B] dark:text-gray-300">
         {help}
       </p>
       <input
@@ -77,7 +68,7 @@ function Slider({ id, label, help, value, display: shown, min, max, step, onChan
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className="rr-range w-full cursor-pointer"
-        style={{ background: `linear-gradient(to right, ${C.accent} ${pct}%, ${C.track} ${pct}%)` }}
+        style={{ background: `linear-gradient(to right, #d96b38 ${pct}%, rgba(150,140,130,0.28) ${pct}%)` }}
       />
     </div>
   );
@@ -98,32 +89,33 @@ export default function ScoreExplainer() {
   const r = rating(rounded);
 
   return (
-    <section className={`${body.className} w-full border-t`} style={{ backgroundColor: C.band, borderColor: C.line }}>
+    <section
+      className={`${body.className} w-full border-t bg-[#F6F1E9] border-[#E3D7C5] dark:bg-[#161513] dark:border-white/15 transition-colors`}
+    >
       {/* Slider track + thumb styling (native range inputs need these selectors) */}
       <style>{`
         .rr-range { -webkit-appearance: none; appearance: none; height: 8px; border-radius: 999px; outline: none; }
-        .rr-range:focus-visible { outline: 3px solid ${C.accent}; outline-offset: 4px; }
-        .rr-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: ${C.accent}; border: 0; cursor: pointer; }
-        .rr-range::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: ${C.accent}; border: 0; cursor: pointer; }
+        .rr-range:focus-visible { outline: 3px solid #d96b38; outline-offset: 4px; }
+        .rr-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #d96b38; border: 0; cursor: pointer; }
+        .rr-range::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #d96b38; border: 0; cursor: pointer; }
         .rr-range::-moz-range-track { background: transparent; }
       `}</style>
 
       <div className="max-w-6xl mx-auto px-6 py-14 flex flex-col lg:flex-row gap-10 lg:gap-14">
         {/* Left: heading */}
         <div className="lg:w-80 shrink-0">
-          <span className={`${mono.className} block text-[13px] font-medium uppercase tracking-[0.12em]`} style={{ color: C.accent }}>
+          <span
+            className={`${mono.className} block text-[13px] font-medium uppercase tracking-[0.12em] text-[#A44A0B] dark:text-[#e29b4d]`}
+          >
             Try It Yourself
           </span>
-          <p className="mt-5 text-[17px] leading-relaxed" style={{ color: C.muted }}>
+          <p className="mt-5 text-[17px] leading-relaxed text-[#6B5B4B] dark:text-gray-300">
             A county&rsquo;s threat score combines its disaster history, current conditions, and wildfire forecasts. Move the sliders to see how each one affects the score.
           </p>
         </div>
 
         {/* Right: sliders + result */}
-        <div
-          className="flex-1 min-w-0 flex flex-col md:flex-row gap-8 rounded-3xl border p-7"
-          style={{ backgroundColor: C.card, borderColor: C.line }}
-        >
+        <div className="flex-1 min-w-0 flex flex-col md:flex-row gap-8 rounded-3xl border p-7 bg-[#FFFDF9] border-[#E3D7C5] dark:bg-[#24211d] dark:border-white/15 transition-colors">
           <div className="flex-1 min-w-0 flex flex-col gap-7">
             <Slider
               id="explainer-historical"
@@ -161,8 +153,7 @@ export default function ScoreExplainer() {
           </div>
 
           <div
-            className="md:w-[22rem] flex flex-col items-center justify-center text-center gap-5 rounded-2xl p-6"
-            style={{ backgroundColor: C.result }}
+            className="md:w-[22rem] flex flex-col items-center justify-center text-center gap-5 rounded-2xl p-6 bg-[#EEE5D7] dark:bg-[#191714] dark:border dark:border-white/10 transition-colors"
             aria-live="polite"
           >
             <div className="relative w-36 h-36" role="img" aria-label={`Score ${rounded} of 100`}>
@@ -183,10 +174,10 @@ export default function ScoreExplainer() {
               </svg>
               <div className="absolute inset-0 grid place-items-center text-center">
                 <div>
-                  <span className={`${display.className} block text-5xl font-extrabold leading-none`} style={{ color: C.ink }}>
+                  <span className={`${display.className} block text-5xl font-extrabold leading-none text-[#2A1F16] dark:text-white`}>
                     {rounded}
                   </span>
-                  <span className={`${mono.className} block text-[11px] mt-1.5`} style={{ color: C.muted }}>
+                  <span className={`${mono.className} block text-[11px] mt-1.5 text-[#6B5B4B] dark:text-gray-400`}>
                     OF 100
                   </span>
                 </div>
@@ -197,16 +188,15 @@ export default function ScoreExplainer() {
               {r.label}
             </span>
 
-            <div className={`${mono.className} text-[15px] leading-7 text-left`} style={{ color: C.muted }}>
+            <div className={`${mono.className} text-[15px] leading-7 text-left text-[#6B5B4B] dark:text-gray-400`}>
               {SCORE_WEIGHTS.historical / 100} &times; {historical} ={' '}
-              <span className="font-medium" style={{ color: C.ink }}>{parts.historical.toFixed(1)}</span>
+              <span className="font-medium text-[#2A1F16] dark:text-white">{parts.historical.toFixed(1)}</span>
               <br />+ {SCORE_WEIGHTS.live / 100} &times; {live} ={' '}
-              <span className="font-medium" style={{ color: C.ink }}>{parts.live.toFixed(1)}</span>
+              <span className="font-medium text-[#2A1F16] dark:text-white">{parts.live.toFixed(1)}</span>
               <br />+ {SCORE_WEIGHTS.wildfireModel / 100} &times; {model} ={' '}
-              <span className="font-medium" style={{ color: C.ink }}>{parts.model.toFixed(1)}</span>
-              <br />score = <span className="font-medium" style={{ color: C.ink }}>{rounded}</span> / 100
+              <span className="font-medium text-[#2A1F16] dark:text-white">{parts.model.toFixed(1)}</span>
+              <br />score = <span className="font-medium text-[#2A1F16] dark:text-white">{rounded}</span> / 100
             </div>
-
           </div>
         </div>
       </div>
