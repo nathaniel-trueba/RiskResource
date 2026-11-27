@@ -18,6 +18,8 @@ uv.lock
 
 # data
 backend/ml/wildfire/data/
+# Local output of predict_week (production reads S3). The home page's fixed copy is in backend/data/snapshot/
+backend/data/wildfire_model.json
 
 # Typescript Build Artifacts
 *.tsbuildinfo

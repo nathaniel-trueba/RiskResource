@@ -2,7 +2,7 @@
 // Client for the FastAPI backend. Response shapes are in lib/types.ts and mirror
 // backend/app/schemas.py.
 
-import { CountyRecord, MapValue, SearchResult, StateRecord } from '@/lib/types';
+import { CountyRecord, HomeSnapshot, MapValue, SearchResult, StateRecord } from '@/lib/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api';
 
@@ -48,6 +48,11 @@ export async function fetchMapValues(
     `/map-values?level=${level}&metric=${metric}${hazardParam}`
   );
   return Object.fromEntries(values.map((v) => [v.id, v]));
+}
+
+/** Fixed state scores for the home page's hazard map animation, saved in backend/data/snapshot/. */
+export function fetchHomeSnapshot(): Promise<HomeSnapshot> {
+  return getJson<HomeSnapshot>('/home-snapshot');
 }
 
 /** Counties matching a county name, city or ZIP code, best match first. */

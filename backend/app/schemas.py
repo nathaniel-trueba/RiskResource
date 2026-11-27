@@ -4,6 +4,9 @@ These mirror frontend/lib/types.ts, and JSON field names are camelCase to match
 it. If you change one side, change the other.
 """
 
+from datetime import date
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
@@ -104,6 +107,20 @@ class MapValue(ApiModel):
     # A 0 to 100 score, dollars (loss metrics) or a percent (highLossPct)
     value: float = Field(ge=0)
     tier: Tier | None = None  # Only for score metrics
+
+
+class SnapshotLayer(ApiModel):
+    """One hazard's fixed state scores for the home page map."""
+
+    kind: Literal["week", "day"]  # "week": a weekly model forecast; "day": scores saved on one day
+    as_of: date  # The week's Monday, or the day the scores were saved
+    values: list[MapValue]  # One per state code
+
+
+class HomeSnapshot(ApiModel):
+    """Fixed scores for the home page's hazard map animation, by hazard key."""
+
+    hazards: dict[str, SnapshotLayer]
 
 
 class SearchResult(ApiModel):
