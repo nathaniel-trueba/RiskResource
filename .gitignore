@@ -9,6 +9,18 @@ npm-debug.log*
 __pycache__/
 *.pyc
 .venv/
+.python-version
+pyproject.toml
+uv.lock
 
 # Env files
 .env
+
+# data
+backend/ml/wildfire/data/
+
+# Typescript Build Artifacts
+*.tsbuildinfo
+
+# # Aditya Temp Files
+# davanam-temp/

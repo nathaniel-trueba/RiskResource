@@ -86,42 +86,101 @@ const DATA_SOURCES: DataSource[] = [
 
 // Mirrors ALERT_RULES in backend/app/domain/hazards.py and the thresholds in
 // backend/app/domain/scoring.py. Change them together.
-const LIVE_SIGNALS = [
+interface SeverityLevel {
+  score: number;
+  condition: string;
+}
+
+interface LiveSignalRow {
+  hazard: string;
+  sources: string[];
+  levels: SeverityLevel[]; // lowest score first
+}
+
+const LIVE_SIGNALS: LiveSignalRow[] = [
   {
     hazard: 'Wildfire',
-    sources: 'NWS fire alerts; Open-Meteo humidity and gusts, next 24 hours',
-    lower: 'Fire Weather Watch 60 · humidity ≤ 15% with gusts ≥ 25 mph in the same hour 80',
-    highest: 'Red Flag Warning or Fire Warning: 100',
+    sources: ['NWS fire alerts', 'Open-Meteo (next 24 h)'],
+    levels: [
+      { score: 60, condition: 'Fire Weather Watch' },
+      { score: 80, condition: 'Humidity ≤ 15% and gusts ≥ 25 mph in the same hour' },
+      { score: 100, condition: 'Red Flag Warning or Fire Warning' },
+    ],
   },
   {
     hazard: 'Severe storm',
-    sources: 'NWS storm, wind and winter alerts; Open-Meteo peak gusts',
-    lower: 'Wind Advisory 35 · gusts ≥ 40 mph 70 · High Wind Warning 75 · Severe Thunderstorm Warning 90',
-    highest: 'Extreme Wind Warning or gusts ≥ 58 mph: 100',
+    sources: ['NWS storm, wind and winter alerts', 'Open-Meteo peak gusts'],
+    levels: [
+      { score: 35, condition: 'Wind Advisory' },
+      { score: 70, condition: 'Gusts ≥ 40 mph' },
+      { score: 75, condition: 'High Wind Warning' },
+      { score: 90, condition: 'Severe Thunderstorm Warning' },
+      { score: 100, condition: 'Extreme Wind Warning or gusts ≥ 58 mph' },
+    ],
   },
   {
     hazard: 'Flood',
-    sources: 'NWS flood alerts; NOAA river gauges in and near the county',
-    lower: 'Flood Advisory 35 · gauge at action stage 40 · minor flooding 70 · Flood Warning or moderate flooding 85',
-    highest: 'Flash Flood Warning or major river flooding: 100',
+    sources: ['NWS flood alerts', 'NOAA river gauges'],
+    levels: [
+      { score: 35, condition: 'Flood Advisory' },
+      { score: 40, condition: 'Gauge at action stage' },
+      { score: 70, condition: 'Minor flooding' },
+      { score: 85, condition: 'Flood Warning or moderate flooding' },
+      { score: 100, condition: 'Flash Flood Warning or major river flooding' },
+    ],
   },
   {
     hazard: 'Hurricane',
-    sources: 'NWS tropical and storm surge alerts',
-    lower: 'Tropical Storm Watch 50 · Tropical Storm Warning 75 · Storm Surge Warning 90',
-    highest: 'Hurricane Warning: 100',
+    sources: ['NWS tropical and storm surge alerts'],
+    levels: [
+      { score: 50, condition: 'Tropical Storm Watch' },
+      { score: 75, condition: 'Tropical Storm Warning' },
+      { score: 90, condition: 'Storm Surge Warning' },
+      { score: 100, condition: 'Hurricane Warning' },
+    ],
   },
   {
     hazard: 'Tornado',
-    sources: 'NWS tornado alerts',
-    lower: 'Tornado Watch 65',
-    highest: 'Tornado Warning: 100',
+    sources: ['NWS tornado alerts'],
+    levels: [
+      { score: 65, condition: 'Tornado Watch' },
+      { score: 100, condition: 'Tornado Warning' },
+    ],
   },
   {
     hazard: 'Earthquake',
-    sources: 'USGS earthquakes from the past 7 days',
-    lower: 'M3.0+ within 30 mi 45 · M4.5+ within 30 mi 75',
-    highest: 'M5.5+ within 20 mi: 100',
+    sources: ['USGS (past 7 days)'],
+    levels: [
+      { score: 45, condition: 'M3.0+ within 30 mi' },
+      { score: 75, condition: 'M4.5+ within 30 mi' },
+      { score: 100, condition: 'M5.5+ within 20 mi' },
+    ],
+  },
+];
+
+// Severity bands for the table's columns. Each band's badge uses a muted color:
+// gray low, pale yellow medium, soft red high.
+const SEVERITY_BANDS = [
+  {
+    label: 'Low',
+    range: '0–49',
+    min: 0,
+    max: 49,
+    badge: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-white/10 dark:text-gray-200 dark:border-white/15',
+  },
+  {
+    label: 'Medium',
+    range: '50–84',
+    min: 50,
+    max: 84,
+    badge: 'bg-yellow-50 text-yellow-800 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-200 dark:border-yellow-900/60',
+  },
+  {
+    label: 'High',
+    range: '85–100',
+    min: 85,
+    max: 100,
+    badge: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/50 dark:text-red-200 dark:border-red-900/60',
   },
 ];
 
@@ -341,30 +400,66 @@ export default function AboutDataPage() {
         {/* Data Dictionary Table */}
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10 mb-12">
           <div className="mb-6">
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live signals and how they score</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
-              Each hazard&apos;s live score (0 to 100) is its strongest current signal, and it&apos;s half of that
-              hazard&apos;s score. With nothing happening, the live score is 0. These are the rules in our backend.
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live Signals And How They Score</h2>
+            <p className="text-s text-gray-600 dark:text-gray-400 mt-1 max-w-2.5xl leading-relaxed">
+              Each hazard gets a threat score from 0 to 100.  Live sources make up half of it. 
+              If there are no live warnings, the live score is 0. 
+              <br />Here is how we score live signals of varying severity:
             </p>
           </div>
 
           <div className="overflow-x-auto bg-white dark:bg-[#181613] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xs">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#211e1a] font-mono text-gray-500 dark:text-gray-400 text-[11px]">
-                  <th className="p-3.5">Hazard</th>
-                  <th className="p-3.5">Live sources</th>
-                  <th className="p-3.5">Lower live scores</th>
-                  <th className="p-3.5">Highest live score</th>
+                <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#211e1a] text-xs font-semibold text-slate-700 dark:text-gray-300">
+                  <th scope="col" className="px-4 py-3 align-middle whitespace-nowrap">Hazard</th>
+                  <th scope="col" className="px-4 py-3 align-middle whitespace-nowrap">Live Sources</th>
+                  {SEVERITY_BANDS.map((band) => (
+                    <th key={band.label} scope="col" className="px-4 py-3 align-middle whitespace-nowrap">
+                      {band.label}{' '}
+                      <span className="font-normal text-slate-500 dark:text-gray-400">({band.range})</span>
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-white/10 text-gray-700 dark:text-gray-300">
+              <tbody className="divide-y divide-gray-100 dark:divide-white/10 text-slate-900 dark:text-gray-100">
                 {LIVE_SIGNALS.map((row) => (
-                  <tr key={row.hazard}>
-                    <td className="p-3.5 font-bold text-gray-900 dark:text-white">{row.hazard}</td>
-                    <td className="p-3.5">{row.sources}</td>
-                    <td className="p-3.5 font-mono">{row.lower}</td>
-                    <td className="p-3.5 font-mono text-rose-700 dark:text-rose-400 font-semibold">{row.highest}</td>
+                  <tr key={row.hazard} className="align-top">
+                    <th scope="row" className="px-4 py-3.5 font-bold whitespace-nowrap">{row.hazard}</th>
+                    <td className="px-4 py-3.5 text-slate-700 dark:text-gray-300 min-w-[9rem] max-w-[13rem]">
+                      <ul className="space-y-0.5 leading-snug">
+                        {row.sources.map((source) => (
+                          <li key={source}>{source}</li>
+                        ))}
+                      </ul>
+                    </td>
+                    {SEVERITY_BANDS.map((band) => {
+                      const levels = row.levels
+                        .filter((level) => level.score >= band.min && level.score <= band.max)
+                        .sort((a, b) => a.score - b.score);
+                      return (
+                        <td key={band.label} className="px-4 py-3.5 min-w-[11rem]">
+                          {levels.length === 0 ? (
+                            <span className="text-gray-400 dark:text-gray-500" aria-label="None">
+                              —
+                            </span>
+                          ) : (
+                            <ol className="space-y-2">
+                              {levels.map((level) => (
+                                <li key={level.condition} className="flex items-start gap-2">
+                                  <span
+                                    className={`inline-flex w-9 shrink-0 justify-center rounded-full border py-0.5 text-xs font-semibold tabular-nums ${band.badge}`}
+                                  >
+                                    {level.score}
+                                  </span>
+                                  <span className="leading-snug pt-0.5">{level.condition}</span>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
