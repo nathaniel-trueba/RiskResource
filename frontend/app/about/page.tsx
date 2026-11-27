@@ -258,16 +258,16 @@ export default function AboutDataPage() {
                 </svg>
               </div>
 
-              {/* Step 3 */}
-              <div className="bg-[#1c1b1a] dark:bg-[#0e0d0c] p-5 border border-gray-900 dark:border-white/20 text-white flex flex-col justify-between">
+			{/* Step 3 */}
+              <div className="bg-white dark:bg-[#1c1915] p-5 border border-gray-800 dark:border-white/20 flex flex-col justify-between">
                 <div>
-                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#e2b46d]">
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#d96b38]">
                     Step 3 · Add Wildfire Model
                   </span>
-                  <div className="text-3xl font-bold tracking-tight text-[#df7541] mt-2">
+                  <div className="text-3xl font-bold tracking-tight text-gray-950 dark:text-white mt-2">
                     80 / 20
                   </div>
-                  <p className="text-xs text-gray-200 mt-2.5 leading-relaxed">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
                     80% combined hazard score + {SCORE_WEIGHTS.wildfireModel}% this week&apos;s ML wildfire forecast
                   </p>
                 </div>
