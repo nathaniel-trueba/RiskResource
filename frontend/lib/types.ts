@@ -87,6 +87,17 @@ export interface MapValue {
   tier?: Tier | null;  // Only for score metrics
 }
 
+// One hazard's fixed state scores for the home page map, from GET /api/home-snapshot
+export interface SnapshotLayer {
+  kind: 'week' | 'day'; // 'week': a weekly model forecast; 'day': scores saved on one day
+  asOf: string;         // YYYY-MM-DD: the week's Monday, or the day the scores were saved
+  values: MapValue[];   // One per state code
+}
+
+export interface HomeSnapshot {
+  hazards: Record<string, SnapshotLayer>; // By hazard key, e.g. "wildfire"
+}
+
 // One search match, from GET /api/search
 export interface SearchResult {
   fips: string;

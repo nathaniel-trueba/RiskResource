@@ -16,7 +16,8 @@ from app.clients.usgs import UsgsClient
 from app.config import BACKEND_DIR, get_settings
 from app.core.cache import TTLCache
 from app.db import connect, initialize
-from app.routers import counties, health, map_values, search, states
+from app.routers import counties, health, home_snapshot, map_values, search, states
+from app.services.home_snapshot import load_home_snapshot
 from app.services.reference import ReferenceData
 from app.services.risk import RiskService
 from app.services.search import SearchService
@@ -57,6 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             return ReferenceData.from_database(conn)
 
     reference = await asyncio.to_thread(load_reference)
+    app.state.home_snapshot = load_home_snapshot(BACKEND_DIR / settings.home_snapshot_dir, reference)
     cache = TTLCache(settings.max_stale_seconds, settings.failure_cooldown_seconds)
 
     async with httpx.AsyncClient(
@@ -107,7 +109,7 @@ def create_app() -> FastAPI:
     )
 
     api = APIRouter(prefix="/api")
-    for module in (health, states, counties, map_values, search):
+    for module in (health, states, counties, map_values, search, home_snapshot):
         api.include_router(module.router)
     app.include_router(api)
     return app

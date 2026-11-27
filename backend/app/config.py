@@ -22,10 +22,15 @@ class Settings(BaseSettings):
     # Where the weekly wildfire job writes its county probabilities: a file path
     # (relative paths are under backend/) or s3://bucket/key. Must match the job's
     # WILDFIRE_MODEL_URI. Re-read whenever it changes. See weekly_scores/store.py.
+    # Production sets s3://riskresource-data-bucket/wildfire/latest.json. The local
+    # default is git-ignored: run predict_week to create it, or the overall score
+    # leaves the model out.
     wildfire_model_uri: str = "data/wildfire_model.json"
     # Days after the file's weekStart that it still counts. After this, the overall
     # score leaves the model out rather than use an old week's forecast.
     wildfire_model_max_age_days: int = 13
+    # Fixed scores for the home page's map animation. See services/home_snapshot.py.
+    home_snapshot_dir: str = "data/snapshot"
     # When NWS is unreachable, show alerts from the Lambda's archive if its last run
     # is at most this old. Keep it a bit above the Lambda's schedule: 90 for hourly
     # runs, 30 for every 15 minutes. See services/alert_archive.py.

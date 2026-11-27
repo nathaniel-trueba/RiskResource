@@ -13,8 +13,8 @@ The overall threat score is **40% historical, 40% live and 20% wildfire model**:
   forecasts, NOAA river gauges). It's fetched on demand and cached in memory.
 - **Wildfire model:** this week's chance of a large wildfire starting in the county, from
   the XGBoost model in [`ml/wildfire/`](ml/wildfire/README.md). A weekly job
-  (`python -m ml.wildfire.predict_week`) publishes it to `WILDFIRE_MODEL_URI` (by default
-  `data/wildfire_model.json`; an `s3://` URI after the AWS migration), and the API reads
+  (`python -m ml.wildfire.predict_week`) publishes it to `WILDFIRE_MODEL_URI` (in production
+  `s3://riskresource-data-bucket/wildfire/latest.json`; locally `data/wildfire_model.json`, git-ignored), and the API reads
   it from there, so the API itself doesn't need the ML dependencies. The two sides share
   only [`weekly_scores/`](weekly_scores/__init__.py).
 

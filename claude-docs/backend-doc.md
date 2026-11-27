@@ -105,7 +105,8 @@ backend/
   env.example
   db/schema.sql                  The whole database schema; safe to re-run
   data/reference.json            Snapshot that seeds the database; generated, committed, 2.0 MB
-  data/wildfire_model.json       This week's wildfire model probabilities (the local default for WILDFIRE_MODEL_URI)
+  data/wildfire_model.json       Local default for WILDFIRE_MODEL_URI, written by predict_week; git-ignored (production reads S3)
+  data/snapshot/                 Fixed state scores for the home page's map animation, served by GET /api/home-snapshot
   weekly_scores/                 Stdlib-only hand-off between the weekly job and the API: document format and stores (file, S3)
   ml/wildfire/                   The wildfire model: training, artifacts, predict_week.py and the AWS handler.py (needs requirements-ml.txt)
   aws/
@@ -177,6 +178,7 @@ All are `GET`, under `/api`. JSON field names are camelCase.
 | `/api/map-values?level=&metric=&hazard=` | `MapValue[]` | 400 unsupported combination, 422 invalid value |
 | `/api/search?q=&limit=` | `SearchResult[]`. Empty when nothing matches | 422 missing `q` |
 | `/api/health` | Status of each source | None |
+| `/api/home-snapshot` | `HomeSnapshot`: fixed state scores per hazard for the home page animation, each with `kind` (`week` or `day`) and `asOf`. Loaded at startup from the newest `wildfire-*-snapshot.json` (a weekly scores document, scored by state like the live snapshot) and `hazards-*-snapshot.json` in `data/snapshot/` | 503 if neither file could be read |
 
 ### `/api/map-values` parameters
 

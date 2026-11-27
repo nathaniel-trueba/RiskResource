@@ -2,9 +2,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { fetchMapValues, MapMetric } from '@/lib/api';
+import { fetchHomeSnapshot, MapMetric } from '@/lib/api';
 import { scoreColor } from '@/lib/riskColors';
-import { MapValue } from '@/lib/types';
+import { MapValue, SnapshotLayer } from '@/lib/types';
 import { useTheme } from '@/components/common/ThemeProvider';
 import type { Feature, Geometry, Position } from 'geojson';
 
@@ -203,24 +203,51 @@ function geoJsonToPath(geometry: Geometry | null, stateName: string): string {
   return '';
 }
 
+/** "2026-11-23" -> "11/23/26", without time-zone shifts. */
+function formatShortDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-');
+  return `${month}/${day}/${year.slice(2)}`;
+}
+
+/** The card's footer for one hazard's snapshot. */
+function snapshotLabel(layer: SnapshotLayer): string {
+  const date = formatShortDate(layer.asOf);
+  return layer.kind === 'week' ? `Week of ${date}` : `Snapshot of scores for ${date}`;
+}
+
+interface HazardSnapshot {
+  label: string;
+  values: Record<string, MapValue>;
+}
+
 export default function HazardMapShowcase() {
   const [activeHazard, setActiveHazard] = useState<HazardType>('Flood');
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [scores, setScores] = useState<Partial<Record<HazardType, Record<string, MapValue>>>>({});
+  const [snapshot, setSnapshot] = useState<Partial<Record<HazardType, HazardSnapshot>>>({});
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  // Fetch live state scores if backend is running; otherwise falls back smoothly
+  // Fixed state scores (backend/data/snapshot/), so the colours don't change with
+  // today's conditions. If the backend can't be reached, the regional highlights
+  // in HAZARD_CONFIG are shown instead, without a date.
   useEffect(() => {
-    Promise.all(
-      HAZARDS.map((hazard) =>
-        fetchMapValues('state', HAZARD_CONFIG[hazard].metric).then((values) => [hazard, values] as const)
-      )
-    )
-      .then((entries) => setScores(Object.fromEntries(entries)))
+    fetchHomeSnapshot()
+      .then((data) => {
+        const byHazard: Partial<Record<HazardType, HazardSnapshot>> = {};
+        for (const hazard of HAZARDS) {
+          const layer = data.hazards[HAZARD_CONFIG[hazard].metric];
+          if (layer) {
+            byHazard[hazard] = {
+              label: snapshotLabel(layer),
+              values: Object.fromEntries(layer.values.map((v) => [v.id, v])),
+            };
+          }
+        }
+        setSnapshot(byHazard);
+      })
       .catch(() => {
         // Fallback regional highlights will be used automatically
       });
@@ -272,7 +299,7 @@ export default function HazardMapShowcase() {
             <svg viewBox="70 15 720 525" className="w-full h-auto select-none">
               {features.map((feature, idx) => {
                 const name = feature.properties?.name || '';
-                const value = scores[activeHazard]?.[String(feature.id)];
+                const value = snapshot[activeHazard]?.values[String(feature.id)];
                 const fill = value
                   ? scoreColor(value.value)
                   : current.fallbackStates[name] || defaultBaseColor;
@@ -351,6 +378,12 @@ export default function HazardMapShowcase() {
           </div>
         </div>
       </div>
+
+      {snapshot[activeHazard] && (
+        <p className="mt-4 text-right text-[11px] font-mono text-gray-500 dark:text-gray-400">
+          {snapshot[activeHazard]?.label}
+        </p>
+      )}
     </div>
   );
 }
