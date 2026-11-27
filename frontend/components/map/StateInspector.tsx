@@ -45,7 +45,7 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
           <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
             <span className="text-[10px] text-gray-500 block">Threat Index</span>
             <span className="text-base font-bold text-[#7a221b] font-mono mt-0.5 block">
-              {stateData.tier} (Live)
+              {stateData.tier}
             </span>
           </div>
         </div>
