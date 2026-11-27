@@ -25,6 +25,14 @@ Also used, because none of the APIs above provide population, county names or pl
 - County boundaries GeoJSON (Plotly): https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json
 - Open-Meteo Geocoding API: https://geocoding-api.open-meteo.com/v1/search
 
+Used by the wildfire model (weekly, outside the API: the AWS pipeline in backend/aws/ or ml/wildfire/predict_week.py):
+- NASA POWER Daily API (daily weather from the MERRA-2 reanalysis, per grid cell):
+    - Documentation: https://power.larc.nasa.gov/docs/services/api/
+    - Base Request URL: https://power.larc.nasa.gov/api/temporal/daily/point
+    - No API key. Rate-limited to about 100 requests a minute (HTTP 429 above that), so we send 60 a minute.
+    - Also the weather source the model was trained on.
+- Open-Meteo Forecast API (above): fills in the days POWER doesn't have yet.
+
 See apis-usage.md for exactly how each one is called.
 
 Notes:

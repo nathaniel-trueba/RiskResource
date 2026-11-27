@@ -4,7 +4,7 @@ Audience: developers and coding agents working on the backend.
 
 This doc lists exactly what the backend calls and what it does with the results. For how the pieces fit together, see [`backend-doc.md`](backend-doc.md). For the list of APIs the team chose, see [`apis.md`](apis.md).
 
-Snapshot: 2026-11-18, matching `main` at `c25e614`. The backend's API calls haven't changed since 2026-11-14 (`221a0c8`), when the limits and row counts below were documented or observed.
+Snapshot: 2026-11-18, matching `main` at `c25e614`. The backend's API calls haven't changed since 2026-11-14 (`221a0c8`), when the limits and row counts below were documented or observed. Updated 2026-11-26 for the wildfire model's weekly job (NASA POWER) and the NWS alert archive.
 
 The backend also uses a Supabase Postgres database. That's our own storage, not an external data API, so it's covered in [`backend-doc.md`](backend-doc.md#8-database) instead.
 
@@ -22,6 +22,8 @@ The backend also uses a Supabase Postgres database. That's our own storage, not 
 | [Census population](#census-population-estimates) | Build script | Manual | All counties | 2 files per build | Population |
 | [County GeoJSON](#county-boundaries) | Build script | Manual | All counties | 1 file per build | County list, locations |
 | [FEMA National Risk Index](#fema-national-risk-index) | Build script | Manual | All NRI counties | 2 calls per build | Expected annual loss, vulnerability and resilience ratings |
+| [NASA POWER daily weather](#nasa-power-daily-weather) | Weekly job: AWS pipeline (`aws/wildfire_steps.py`) or `ml/wildfire/predict_week.py` | Mondays 06:00 UTC | Every POWER grid cell (~1,895) | ~1,895 calls per run | The wildfire model's weather inputs |
+| [Open-Meteo forecast (weekly job)](#open-meteo-forecast-weekly-job) | Same weekly job | Mondays 06:00 UTC | 50 cells per call | ~38 calls per run | The days POWER doesn't have yet |
 
 **None of them need an API key.** Every request sends the header `User-Agent: UCSD-Risk-Resource-NotForProfit`, set by `USER_AGENT` in [`app/config.py`](../backend/app/config.py). NWS rejects requests without a `User-Agent` (tested: 403).
 
@@ -283,6 +285,61 @@ Pages are fetched until the response no longer has `exceededTransferLimit`. Ther
 **Limits:** 2,000 records per query, the layer's `maxRecordCount`. No rate limit is stated. ArcGIS reports query errors as HTTP 200 with an `error` object, which the script checks for.
 
 **FEMA's other hosts didn't work.** The NRI services on `hazards.geoplatform.gov` didn't respond during testing.
+
+## NWS alert archive (AWS Lambda)
+
+[`aws/lambda_function.py`](../backend/aws/lambda_function.py) runs on an EventBridge schedule every 15 minutes (not hourly, because many tornado and severe thunderstorm warnings last under an hour). It makes one call: NWS active alerts, using the `nws_alerts` row of `api_config` for the URL and User-Agent, with `status=actual&message_type=alert,update` like the backend. It keeps alerts that cover a county in `public.counties`, upserts them into `nws_alert_archive`, records `archive_settings.last_run_at`, and deletes alerts sent more than `retention_days` ago. It's the backend's fallback when the API can't reach NWS. It no longer calls USGS, NWPS, Open-Meteo or the NRI.
+
+## Wildfire model weekly job
+
+The wildfire model's weather is fetched once a week, outside the API. The API only reads the published scores document (`WILDFIRE_MODEL_URI`).
+
+- **On AWS (production):** every Monday at 06:00 UTC, EventBridge Scheduler starts a Step Functions state machine ([`aws/wildfire_state_machine.json`](../backend/aws/wildfire_state_machine.json)) that runs the three Lambdas in [`aws/wildfire_steps.py`](../backend/aws/wildfire_steps.py): `fetch_chunk` (NASA POWER, in 8 chunks, one at a time), `build_features` (the Open-Meteo forecast and the model's features), then `calibrate_and_publish`. It publishes `s3://riskresource-data-bucket/wildfire/latest.json`.
+- **Locally:** [`ml/wildfire/predict_week.py`](../backend/ml/wildfire/predict_week.py) makes the same calls in one run (about 30 minutes) and publishes to `WILDFIRE_MODEL_URI`, by default `backend/data/wildfire_model.json`.
+
+### NASA POWER daily weather
+
+NASA's [POWER](https://power.larc.nasa.gov/) (Prediction Of Worldwide Energy Resources) project serves daily weather from the MERRA-2 reanalysis on a 0.5° latitude × 0.625° longitude grid. It's the wildfire model's main weather source, both for training and for each week's scores. No API key; the request sends our usual `User-Agent`.
+
+```
+GET https://power.larc.nasa.gov/api/temporal/daily/point
+    ?parameters=T2M_MAX,T2MDEW,RH2M,WS10M_MAX,PRECTOTCORR,GWETTOP,GWETROOT
+    &community=AG&latitude=33.5000&longitude=-116.8750
+    &start=20260527&end=20261126&format=JSON
+```
+
+| Parameter | Meaning | Unit |
+|---|---|---|
+| `T2M_MAX` | Daily maximum temperature at 2 m | °C |
+| `T2MDEW` | Dew point at 2 m (with temperature, gives vapor pressure deficit) | °C |
+| `RH2M` | Relative humidity at 2 m | % |
+| `WS10M_MAX` | Daily maximum wind speed at 10 m | m/s |
+| `PRECTOTCORR` | Precipitation, bias-corrected | mm/day |
+| `GWETTOP` | Surface soil wetness | 0 to 1 |
+| `GWETROOT` | Root-zone soil wetness | 0 to 1 |
+
+- **One request per grid cell.** Each county is snapped to its cell's center (`sources.power_cell`), so nearby counties share one download. About 1,895 cells cover all 3,221 counties.
+- **Date range:**
+  - **Weekly:** 180 days before the week's Monday through the run day.
+  - **Training:** 2009-09-01 to the end of the last training year (`config.WEATHER_START`, `WEATHER_END`).
+  - POWER runs a few days behind, so the weekly job fills the missing days from the Open-Meteo forecast (below).
+- **Rate limit:** POWER sits behind a CloudFront limit that answers HTTP 429, with no `Retry-After`, above about 100 requests a minute. Every caller paces to **60 a minute with 3 workers**. After a 429:
+  - **Locally:** each cell is retried 6 times, waiting 60 s and doubling.
+  - **On AWS:** `fetch_chunk` tries each cell once. On a 429 it raises `Throttled` and keeps what it saved. Step Functions waits (60 s, doubling, up to 5 times) and reruns the chunk, which skips cells already in S3.
+  - The pace is set by `WILDFIRE_POWER_PER_MINUTE` and `WILDFIRE_POWER_WORKERS` on the Lambda.
+- **Response:** `properties.parameter.<NAME>` maps `YYYYMMDD` to a value. Missing values are `-999`, which become NaN.
+- **Where downloads are kept:**
+  - **On AWS:** in S3 at `raw/{week}/power_{start}_{end}/{cell}.parquet`, deleted after 14 days.
+  - **Locally:** under `ml/wildfire/data/live/` for the weekly job, and `ml/wildfire/data/raw/power/` for training.
+- **Code:** `fetch_power_cell` in [`ml/wildfire/sources.py`](../backend/ml/wildfire/sources.py).
+
+### Open-Meteo forecast (weekly job)
+
+| Call | Request | Notes |
+|---|---|---|
+| Open-Meteo forecast | 50 cells per request (comma-separated `latitude`/`longitude`), `daily=temperature_2m_max,dew_point_2m_mean,relative_humidity_2m_mean,wind_speed_10m_max,precipitation_sum`, `wind_speed_unit=ms`, `timezone=GMT`, 14 days before today through the week's Sunday | Only fills days POWER doesn't have. Requests are 8 s apart (`FORECAST_INTERVAL_SECONDS`): each counts as about 75 calls against the 600-a-minute limit, and unpaced runs got HTTP 429. A run uses roughly 2,000 to 3,000 of the 10,000 daily calls, shared with the API's own forecast calls |
+
+**If it fails:** failed POWER cells and Open-Meteo batches are logged and skipped. On AWS, a chunk fails (and is retried) if more than 5% of its cells fail (`WILDFIRE_CHUNK_MAX_FAILED`). Counties with no weather for the week are left out of the file, and their overall score uses the hazards alone.
 
 ## Adding or changing an API call
 

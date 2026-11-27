@@ -4,13 +4,24 @@ A FastAPI service that scores US states and counties for six natural hazards (wi
 earthquake, flood, severe storm, hurricane, tornado) and serves those scores to the
 Next.js frontend.
 
-Each score blends two halves, 50/50:
+The overall threat score is **40% historical, 40% live and 20% wildfire model**:
 
-- **Baseline:** how often a hazard has hit a place historically (FEMA disaster
+- **Historical baseline:** how often a hazard has hit a place historically (FEMA disaster
   declarations and USGS earthquakes since 2006). This is precomputed and stored in
   Supabase Postgres.
 - **Live signal:** what's happening now (NWS alerts, recent USGS quakes, Open-Meteo
   forecasts, NOAA river gauges). It's fetched on demand and cached in memory.
+- **Wildfire model:** this week's chance of a large wildfire starting in the county, from
+  the XGBoost model in [`ml/wildfire/`](ml/wildfire/README.md). A weekly job
+  (`python -m ml.wildfire.predict_week`) publishes it to `WILDFIRE_MODEL_URI` (by default
+  `data/wildfire_model.json`; an `s3://` URI after the AWS migration), and the API reads
+  it from there, so the API itself doesn't need the ML dependencies. The two sides share
+  only [`weekly_scores/`](weekly_scores/__init__.py).
+
+Historical and live are blended inside each hazard score (50/50, their 40:40 ratio).
+The model is added to the overall score only, which gives the overall score a
+wildfire bias by design. If the model file is missing or stale, the overall score
+uses the hazards alone.
 
 Separately from the score, the API serves **expected annual loss** in dollars from
 FEMA's National Risk Index (NRI). It's static, stored with the reference data, and
@@ -114,6 +125,8 @@ backend/
 │   └── core/cache.py      In-memory TTL cache that serves recent data during outages
 ├── db/schema.sql          The whole database schema (safe to re-run)
 ├── data/reference.json    Committed snapshot of the reference data, used to seed the DB
+├── ml/wildfire/           XGBoost weekly wildfire ignition model (see its README.md).
+│                          Extra packages: requirements-ml.txt. Not wired into the API yet.
 └── scripts/
     ├── init_db.py             CLI: initialize, reseed or refresh the database
     └── build_reference_data.py  Computes the reference data from FEMA, USGS and Census
@@ -142,8 +155,12 @@ backend/
 - **County detail** (`RiskService.get_county`) also adds two per-county sources: the
   Open-Meteo forecast (wildfire weather, wind) and NWPS river gauges (flood). That's
   why a county's detail score can be higher than its map value.
-- **Composite scores** are 60% the worst hazard plus 40% the mean of the top three
-  (`domain/scoring.composite_score`).
+- **Overall scores** (`compositeScore`) are 80% the hazard composite plus 20% the
+  wildfire model score (`domain/scoring.overall_score`). The hazard composite is 60%
+  the worst hazard plus 40% the mean of the top three (`domain/scoring.composite_score`).
+  The model's weekly probability is scored on a log scale: 0.01% is 0, 1% is 67 and
+  10% or more is 100 (`domain/scoring.wildfire_model_score`). States use the
+  population-weighted model score of their counties.
 - **Tiers** are Low (0 to 29), Moderate (30 to 49), Elevated (50 to 74) and Critical
   (75 to 100).
 
@@ -179,7 +196,7 @@ it.
 | `nri_meta` | One row: NRI version and the high-loss threshold |
 | `nri_county_profiles`, `nri_county_losses` | Per county: NRI population, social vulnerability and community resilience ratings, loss-per-person percentile, and expected annual loss per hazard |
 | `nri_state_profiles`, `nri_state_losses` | Per state: population, residents in high-loss counties, and expected annual loss per hazard |
-| `api_config`, `locations`, `weather_observations`, `earthquakes`, `weather_alerts`, `gauges` | Tables for storing live upstream data. Not used yet: live data is cached in memory |
+| `nws_alert_archive`, `archive_settings`, `api_config` | The AWS Lambda's rolling one-year NWS alert archive, its settings, and its NWS request config. The API reads the archive only when NWS is unreachable (`services/alert_archive.py`) |
 
 The reference data counts as seeded only when every reference table has rows, so a
 database seeded before a table existed is reseeded on the next startup.

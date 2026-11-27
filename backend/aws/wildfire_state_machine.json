@@ -1,0 +1,89 @@
+{
+  "Comment": "Weekly wildfire scores. Start with {\"chunks\": [0,1,2,3,4,5,6,7]}. No placeholders to replace.",
+  "StartAt": "DownloadWeather",
+  "States": {
+    "DownloadWeather": {
+      "Type": "Map",
+      "ItemsPath": "$.chunks",
+      "ItemSelector": {
+        "chunk.$": "$$.Map.Item.Value",
+        "of": 8,
+        "startTime.$": "$$.Execution.StartTime"
+      },
+      "MaxConcurrency": 1,
+      "ItemProcessor": {
+        "ProcessorConfig": { "Mode": "INLINE" },
+        "StartAt": "FetchChunk",
+        "States": {
+          "FetchChunk": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "wildfire-fetch-chunk",
+              "Payload.$": "$"
+            },
+            "ResultSelector": { "cells.$": "$.Payload.cells" },
+            "Retry": [
+              {
+                "ErrorEquals": ["Throttled"],
+                "IntervalSeconds": 60,
+                "BackoffRate": 2,
+                "MaxAttempts": 5,
+                "JitterStrategy": "FULL"
+              },
+              {
+                "ErrorEquals": ["ChunkIncomplete"],
+                "IntervalSeconds": 10,
+                "BackoffRate": 1,
+                "MaxAttempts": 4
+              },
+              {
+                "ErrorEquals": ["Sandbox.Timedout", "Lambda.Unknown", "Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "Lambda.ClientExecutionTimeoutException"],
+                "IntervalSeconds": 30,
+                "BackoffRate": 2,
+                "MaxAttempts": 3
+              }
+            ],
+            "End": true
+          }
+        }
+      },
+      "ResultPath": null,
+      "Next": "BuildFeatures"
+    },
+
+    "BuildFeatures": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "wildfire-build-features",
+        "Payload": { "startTime.$": "$$.Execution.StartTime" }
+      },
+      "ResultSelector": {
+        "week.$": "$.Payload.week",
+        "featuresUri.$": "$.Payload.featuresUri"
+      },
+      "ResultPath": "$.features",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 120,
+          "BackoffRate": 2,
+          "MaxAttempts": 2
+        }
+      ],
+      "Next": "CalibrateAndPublish"
+    },
+
+    "CalibrateAndPublish": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "wildfire-calibrate-publish",
+        "Payload": { "week.$": "$.features.week" }
+      },
+      "Retry": [{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": 60, "BackoffRate": 2, "MaxAttempts": 3 }],
+      "End": true
+    }
+  }
+}

@@ -53,9 +53,21 @@ class StateExpectedLoss(ExpectedLoss):
     high_loss_population_pct: float | None = None  # % of residents in high-loss counties
 
 
+class WildfireModelInfo(ApiModel):
+    """The wildfire model's part of the overall score (20% of it)."""
+
+    score: int = Field(ge=0, le=100)  # From the weekly probability, on a log scale
+    tier: Tier
+    # Chance a large wildfire starts in the county this week, 0 to 1. Counties only.
+    probability: float | None = Field(default=None, ge=0, le=1)
+    week_start: str  # The Monday of the forecast week, e.g. "2026-11-23"
+
+
 class StateRecord(ApiModel):
     code: str
     name: str
+    # Overall score: 40% historical, 40% live (through the hazard scores) and 20%
+    # wildfire model. The hazard composite alone when wildfire_model is omitted.
     composite_score: int = Field(ge=0, le=100)
     tier: Tier
     counties_count: int
@@ -63,6 +75,8 @@ class StateRecord(ApiModel):
     active_alert_count: int | None = None  # Omitted when the NWS feed is unavailable
     primary_alert: str | None = None  # Omitted when there are no active alerts
     hazards: list[HazardItem]  # Highest score first
+    # Population-weighted over counties. Omitted when the model file is missing or stale.
+    wildfire_model: WildfireModelInfo | None = None
     expected_loss: StateExpectedLoss | None = None  # Omitted when NRI has no data
 
 
@@ -70,12 +84,14 @@ class CountyRecord(ApiModel):
     name: str  # Includes the suffix, e.g. "Riverside County"
     state: str  # Full state name, e.g. "California"
     state_code: str  # Two letters, e.g. "CA"
-    composite_score: int = Field(ge=0, le=100)
+    composite_score: int = Field(ge=0, le=100)  # Overall score, as for StateRecord
     tier: Tier
     fips: str  # Five characters with leading zero, e.g. "06065"
     pop: str  # Preformatted, e.g. "2,458,395"
     active_alert: str | None = None  # Omitted when there are no active alerts
     hazards: list[HazardItem]  # Highest score first
+    # Omitted when the model file is missing or stale, or had no weather for the county
+    wildfire_model: WildfireModelInfo | None = None
     # Omitted when NRI has no county data, e.g. Connecticut, which NRI reports by
     # planning region instead
     expected_loss: CountyExpectedLoss | None = None

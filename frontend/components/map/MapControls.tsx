@@ -9,7 +9,7 @@ import { SearchResult } from '@/lib/types';
 export type Measure = 'score' | LossMetric;
 
 export const MEASURES: { value: Measure; label: string; statesOnly?: boolean }[] = [
-  { value: 'score', label: 'Risk score (history + live conditions)' },
+  { value: 'score', label: 'Risk score (history + live conditions + wildfire model)' },
   { value: 'lossPerPerson', label: 'Expected annual loss per person (FEMA)' },
   { value: 'totalLoss', label: 'Total expected annual loss (FEMA)' },
   { value: 'highLossPct', label: '% of residents in high-loss counties (FEMA)', statesOnly: true },

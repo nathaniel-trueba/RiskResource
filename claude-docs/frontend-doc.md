@@ -2,7 +2,7 @@
 
 Audience: developers and coding agents working on the frontend or the backend that feeds it.
 
-Snapshot: 2026-11-18, matching `main` at `c25e614` (after PR #18). Line references will drift. If this doc and the code disagree, the code wins, and this doc should be updated.
+Snapshot: 2026-11-18, matching `main` at `c25e614` (after PR #18), updated 2026-11-25 for the 40/40/20 overall score with the wildfire model. Line references will drift. If this doc and the code disagree, the code wins, and this doc should be updated.
 
 Related docs:
 
@@ -74,24 +74,26 @@ frontend/
       HazardMapShowcase.tsx  SVG state map coloured by real per-hazard scores
       FeaturesGrid.tsx       Static content
     about/
-      ScoreExplainer.tsx     Interactive sliders; client-side only, no backend data
+      ScoreExplainer.tsx     Sliders for history, live and wildfire model; shows the 40/40/20 formula. Client-side only
     map/
       RiskLeafletMap.tsx     Leaflet map; fetches GeoJSON; zooms to a focus; loaded with ssr: false
       MapControls.tsx        View toggle, "Show" dropdown, hazard buttons, county search
       MapLegend.tsx          Colour bands for the current measure
       StateInspector.tsx, CountyInspector.tsx    Side panels
       ExpectedLossSection.tsx    FEMA loss section, shared by both side panels
+      WildfireModelSection.tsx   The wildfire model's score and share of the overall score, shared by both side panels
   lib/
     api.ts                   Every backend call
     types.ts                 API response types
     riskColors.ts            Colour bands, hazard list, hazard colours
     format.ts                Dollar and percent formatting
     nri.ts                   What the loss figures include and leave out
+    scoring.ts               The overall score's weights (SCORE_WEIGHTS) and the model's display text
 ```
 
 Every component is in use. The old sample-data components (`HeroSection`, `MiniMapPreview`, `StatsSection`, `CtaBanner`, `CartogramGrid`) and `lib/mockRiskData.ts` were deleted.
 
-**`ScoreExplainer` doesn't describe this site's score.** It computes a score from expected loss × a vulnerability/resilience factor, which resembles FEMA's NRI method. The site's risk score comes from FEMA declarations plus live signals ([`backend-doc.md`](backend-doc.md#5-scoring-model)), and NRI losses aren't part of it. It sits directly under "How the score is built" on `/about`. See [`human-review.md`](human-review.md).
+**The overall score is 40% history, 40% live and 20% wildfire model** ([`backend-doc.md`](backend-doc.md#5-scoring-model)). [`lib/scoring.ts`](../frontend/lib/scoring.ts) holds those weights as `SCORE_WEIGHTS`, mirroring `OVERALL_*_WEIGHT` in `backend/app/domain/scoring.py`; **change them together**. The About page's architecture cards, `ScoreExplainer`, `WildfireModelSection`, the hero card's note and the map legend note all read from it. `ScoreExplainer` simplifies to one hazard (`0.4 × history + 0.4 × live + 0.2 × model`) and says so; the real score blends history and live per hazard first, then combines hazards weighted toward the worst. Hazard bars, and the map filtered to one hazard, don't include the model.
 
 ### `/map` data flow
 
@@ -163,7 +165,7 @@ All in [`lib/riskColors.ts`](../frontend/lib/riskColors.ts):
 | Dollar and percent measures | Quintiles of the values currently shown (`quantileBands`), labelled with real amounts, e.g. `$447 – $737` |
 | No value | Grey, "No data" |
 
-**The score bands aren't the tiers.** Tiers break at 30, 50 and 75, but real scores mostly fall between 0 and 50, because half of each score is live and is 0 when nothing is happening. Tier-based colours made almost the whole map one or two colours. The side panels and tooltips still show the backend's tier names.
+**The score bands aren't the tiers.** Tiers break at 30, 50 and 75, but real scores mostly fall between 0 and 50, because 40% of each score is live and is 0 when nothing is happening. Tier-based colours made almost the whole map one or two colours. The side panels and tooltips still show the backend's tier names.
 
 Quintile bands skip repeated cut points, so a measure where most areas are $0 (for example, hurricane loss) can show fewer than five bands. The home showcase uses `SCORE_BANDS` too.
 
@@ -213,17 +215,26 @@ export interface StateExpectedLoss extends ExpectedLoss {
   highLossPopulationPct?: number;     // % of residents in high-loss counties
 }
 
+// The wildfire model's 20% of the overall score
+export interface WildfireModelInfo {
+  score: number;        // 0 to 100, from the weekly probability on a log scale
+  tier: Tier;
+  probability?: number; // Chance a large wildfire starts this week, 0 to 1. Counties only
+  weekStart: string;    // Monday of the forecast week, e.g. "2026-11-23"
+}
+
 export interface StateRecord {
   code: string;        // Matches the state GeoJSON feature ID, e.g. "CA"
   name: string;
   row?: number; col?: number;         // Leftover: CartogramGrid was deleted, and the API never sends these
-  compositeScore: number;
+  compositeScore: number;    // Overall: 40% history + 40% live + 20% wildfire model (hazards alone without the model)
   tier: Tier;
   countiesCount: number;
   population: string;  // Preformatted, e.g. "39,501,350", or "N/A"
   activeAlertCount?: number; // Absent when the NWS feed is unavailable
   primaryAlert?: string;     // Absent when there are no active alerts
   hazards: HazardItem[];     // Highest score first
+  wildfireModel?: WildfireModelInfo; // Population-weighted; absent when the model file is missing or stale
   expectedLoss?: StateExpectedLoss;
 }
 
@@ -237,6 +248,7 @@ export interface CountyRecord {
   pop: string;         // Preformatted, or "N/A"
   activeAlert?: string; // Absent when there are no active alerts
   hazards: HazardItem[];
+  wildfireModel?: WildfireModelInfo; // Absent when the model is unavailable for the county
   expectedLoss?: CountyExpectedLoss; // Absent without NRI data, e.g. Connecticut
 }
 
@@ -326,7 +338,7 @@ There's no retry button anywhere: reload the page.
 
 ## 7. Known issues
 
-- **`/about` still makes claims that aren't true.** The NRI parts were corrected, but it still describes HRRR wind models, NIFC fire perimeters, ShakeMap ground acceleration, a "Wind × (100 − RH)" index and flood crest thresholds that the backend doesn't use. `ScoreExplainer` describes a different scoring formula (see [section 3](#3-structure)). See [`human-review.md`](human-review.md).
+- **`/about` still makes claims that aren't true.** The NRI parts were corrected, but it still describes HRRR wind models, NIFC fire perimeters, ShakeMap ground acceleration, a "Wind × (100 − RH)" index and flood crest thresholds that the backend doesn't use. See [`human-review.md`](human-review.md).
 - **Footer:** the data feed list now matches the live sources and no longer lists NIFC, but it doesn't list FEMA's NRI, which every loss figure comes from. The Team column is four "Member N" placeholders linking to `#`.
 - **No disclaimer on the site.** Nothing says the site is informational and not a substitute for official warnings. Only the repo README says so.
 - **Fonts aren't applied.** `app/layout.tsx` creates Bricolage Grotesque, DM Sans and JetBrains Mono, but doesn't add their `.variable` classes to `<html>`, so `font-display` and `font-mono` fall back to system fonts. `ScoreExplainer` loads its own fonts separately.
@@ -334,7 +346,7 @@ There's no retry button anywhere: reload the page.
 - **The selected area isn't highlighted** on the map, and map search results don't zoom (only drill-down and arriving from the home page do).
 - **Map search can't tell an outage from no results.**
 - **Unused code and dependencies:** `lucide-react` is unused, `@types/leaflet` is in `dependencies` rather than `devDependencies`, `StateRecord.row`/`col` are never sent, and `/about` imports `Link` without using it.
-- **Duplicated values:** `lib/nri.ts` repeats the backend's NRI hazard mapping, and the "top 20%" and "11 of 18" text repeats backend constants. Update them if those change.
+- **Duplicated values:** `lib/nri.ts` repeats the backend's NRI hazard mapping, `lib/scoring.ts` repeats the 40/40/20 weights, and the About page repeats the model's log-scale examples (0.01% → 0, 1% → 67, 10% → 100). The "top 20%" and "11 of 18" text repeats backend constants. Update them if those change.
 
 ## 8. Guidance for coding agents
 

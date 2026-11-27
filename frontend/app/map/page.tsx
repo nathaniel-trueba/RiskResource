@@ -13,6 +13,7 @@ import type { MapFocus } from '@/components/map/RiskLeafletMap';
 import { fetchCounty, fetchMapValues, fetchState, HazardKey, MapMetric, searchCounties } from '@/lib/api';
 import { formatPct, formatUsd } from '@/lib/format';
 import { bandColor, HAZARDS, quantileBands, SCORE_BANDS } from '@/lib/riskColors';
+import { SCORE_FORMULA } from '@/lib/scoring';
 import { StateRecord, CountyRecord, MapValue } from '@/lib/types';
 
 const RiskLeafletMap = dynamic(
@@ -215,7 +216,10 @@ export default function RiskMapPage() {
       ? SCORE_BANDS
       : quantileBands(Object.values(currentValues ?? {}).map((v) => v.value), format);
   const legend = {
-    score: { title: `Risk score (0–100)${hazardSuffix}`, note: undefined },
+    score: {
+      title: `Risk score (0–100)${hazardSuffix}`,
+      note: activeHazard ? undefined : SCORE_FORMULA,
+    },
     lossPerPerson: {
       title: `Expected annual loss per person${hazardSuffix}`,
       note: 'FEMA NRI estimate, $ per resident per year. 11 of 18 NRI hazards.',

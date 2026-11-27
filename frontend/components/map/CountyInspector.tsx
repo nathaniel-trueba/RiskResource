@@ -4,6 +4,7 @@
 import React from 'react';
 import { CountyRecord } from '@/lib/types';
 import ExpectedLossSection from '@/components/map/ExpectedLossSection';
+import WildfireModelSection from '@/components/map/WildfireModelSection';
 
 interface Props {
   county: CountyRecord;
@@ -89,11 +90,13 @@ export default function CountyInspector({ county, onBackToState }: Props) {
           </div>
         </div>
 
+        <WildfireModelSection model={county.wildfireModel} />
+
         <ExpectedLossSection loss={county.expectedLoss} kind="county" stateCode={county.stateCode} />
       </div>
 
       <div className="pt-4 border-t border-gray-100 text-[10px] text-gray-400 font-mono flex items-center justify-between">
-        <span>Scores: NWS & USGS live feeds · Losses: FEMA NRI</span>
+        <span>Scores: FEMA/USGS history, live feeds, wildfire model · Losses: FEMA NRI</span>
         <span className="text-emerald-600 font-semibold">● Active</span>
       </div>
     </aside>

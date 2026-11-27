@@ -4,6 +4,7 @@
 import React from 'react';
 import { StateRecord } from '@/lib/types';
 import ExpectedLossSection from '@/components/map/ExpectedLossSection';
+import WildfireModelSection from '@/components/map/WildfireModelSection';
 
 interface Props {
   stateData: StateRecord;
@@ -88,6 +89,8 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
             ))}
           </div>
         </div>
+
+        <WildfireModelSection model={stateData.wildfireModel} />
 
         <ExpectedLossSection loss={stateData.expectedLoss} kind="state" stateCode={stateData.code} />
       </div>

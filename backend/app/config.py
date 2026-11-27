@@ -19,6 +19,17 @@ class Settings(BaseSettings):
     database_url: str | None = None
     # Snapshot that seeds an empty database. Rebuilt by scripts/init_db.py --refresh.
     reference_data_path: Path = BACKEND_DIR / "data" / "reference.json"
+    # Where the weekly wildfire job writes its county probabilities: a file path
+    # (relative paths are under backend/) or s3://bucket/key. Must match the job's
+    # WILDFIRE_MODEL_URI. Re-read whenever it changes. See weekly_scores/store.py.
+    wildfire_model_uri: str = "data/wildfire_model.json"
+    # Days after the file's weekStart that it still counts. After this, the overall
+    # score leaves the model out rather than use an old week's forecast.
+    wildfire_model_max_age_days: int = 13
+    # When NWS is unreachable, show alerts from the Lambda's archive if its last run
+    # is at most this old. Keep it a bit above the Lambda's schedule: 90 for hourly
+    # runs, 30 for every 15 minutes. See services/alert_archive.py.
+    alert_archive_max_age_minutes: int = 90
 
     # Cache lifetimes
     feeds_ttl_seconds: int = 300  # NWS alerts and USGS recent earthquakes
