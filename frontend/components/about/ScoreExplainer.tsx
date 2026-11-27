@@ -112,12 +112,10 @@ export default function ScoreExplainer() {
         {/* Left: heading */}
         <div className="lg:w-80 shrink-0">
           <span className={`${mono.className} block text-[13px] font-medium uppercase tracking-[0.12em]`} style={{ color: C.accent }}>
-            How a score is built
+            Try It Yourself
           </span>
           <p className="mt-5 text-[17px] leading-relaxed" style={{ color: C.muted }}>
-            A county&rsquo;s threat score combines its disaster history, what&rsquo;s happening right now, and a
-            forecast of how likely a large wildfire is to start this week. Move the sliders to see how each one
-            pushes the score.
+            A county&rsquo;s threat score combines its disaster history, current conditions, and wildfire forecasts. Move the sliders to see how each one affects the score.
           </p>
         </div>
 
@@ -129,10 +127,10 @@ export default function ScoreExplainer() {
           <div className="flex-1 min-w-0 flex flex-col gap-7">
             <Slider
               id="explainer-historical"
-              label={`History · ${SCORE_WEIGHTS.historical}%`}
-              help="How the county ranks, among counties that have had the hazard, by federal disaster declarations since 2006."
+              label={`History`}
+              help="How frequently this area has experienced major disasters since 2006, based on federal disaster records and seismic history."
               value={historical}
-              display={`${historical} pct`}
+              display={`${historical}`}
               min={0}
               max={100}
               step={1}
@@ -140,8 +138,8 @@ export default function ScoreExplainer() {
             />
             <Slider
               id="explainer-live"
-              label={`Live conditions · ${SCORE_WEIGHTS.live}%`}
-              help="The strongest live signal right now, from weather alerts, forecast gusts, river gauges or recent earthquakes. Usually 0."
+              label={`Live conditions`}
+              help="Active weather warnings, river flood stages, severe wind gusts, or nearby earthquakes happening right now."
               value={live}
               display={String(live)}
               min={0}
@@ -151,8 +149,8 @@ export default function ScoreExplainer() {
             />
             <Slider
               id="explainer-model"
-              label={`Wildfire model · ${SCORE_WEIGHTS.wildfireModel}%`}
-              help="This week's chance of a large wildfire starting in the county, on a log scale: 0.1% scores 33 and 1% scores 67."
+              label={`Wildfire model`}
+              help="Our forecast model's rating of how favorable current heat, dryness, and wind conditions are for a wildfire to ignite in the area."
               value={model}
               display={String(model)}
               min={0}
@@ -163,7 +161,7 @@ export default function ScoreExplainer() {
           </div>
 
           <div
-            className="md:w-[22rem] flex flex-col items-start gap-5 rounded-2xl p-6"
+            className="md:w-[22rem] flex flex-col items-center justify-center text-center gap-5 rounded-2xl p-6"
             style={{ backgroundColor: C.result }}
             aria-live="polite"
           >
@@ -199,7 +197,7 @@ export default function ScoreExplainer() {
               {r.label}
             </span>
 
-            <div className={`${mono.className} text-[15px] leading-7`} style={{ color: C.muted }}>
+            <div className={`${mono.className} text-[15px] leading-7 text-left`} style={{ color: C.muted }}>
               {SCORE_WEIGHTS.historical / 100} &times; {historical} ={' '}
               <span className="font-medium" style={{ color: C.ink }}>{parts.historical.toFixed(1)}</span>
               <br />+ {SCORE_WEIGHTS.live / 100} &times; {live} ={' '}
@@ -209,10 +207,6 @@ export default function ScoreExplainer() {
               <br />score = <span className="font-medium" style={{ color: C.ink }}>{rounded}</span> / 100
             </div>
 
-            <p className="m-0 text-[13.5px] leading-relaxed" style={{ color: C.muted }}>
-              Simplified to one hazard. With several, history and live conditions are blended for each hazard
-              first, and the hazards are combined weighted toward the worst one before the wildfire model is added.
-            </p>
           </div>
         </div>
       </div>
