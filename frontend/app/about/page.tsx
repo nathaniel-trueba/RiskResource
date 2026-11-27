@@ -134,14 +134,16 @@ export default function AboutDataPage() {
         {/* Header Hero Section */}
         <section className="max-w-5xl mx-auto px-6 pt-16 pb-12">
           <h1 className="text-4xl sm:text-5xl font-normal tracking-tight text-gray-950 dark:text-white leading-tight">
-            About the data <br />
+            About the Data
           </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
-            Risk Resource synthesizes natural disaster data from government agencies like FEMA, the National Weather Service and USGS.
-            We organize these large datasets so they serve everyday people wondering, <em>&ldquo;How worried should I be about my home right now?&rdquo;</em> Our
-            threat score combines each county&rsquo;s disaster history since 2006, live warnings and conditions, and a weekly
-            wildfire forecast model. FEMA&rsquo;s estimates of what disasters cost, and how vulnerable and resilient each
-            community is, are shown alongside it.
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
+            Hazard information is scattered across agency sites (NOAA, USGS, FEMA) that were not built
+            for a resident asking &ldquo;how worried should I be about my house, right now?&rdquo; Risk
+            Resource answers that, combining natural disaster data across government agencies reporting
+            disaster history, live warnings, and our own wildfire forecast model, resulting in a single
+            threat score. A user enters an address and gets a composite risk score, a per-hazard breakdown,
+            a map of the live data behind it, a plain-language explanation, and safety resources for the
+            top hazard.
           </p>
         </section>
 
@@ -150,7 +152,7 @@ export default function AboutDataPage() {
           <div className="mb-6">
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">How the score is built</h2>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
-              The overall 0 to 100 threat score has three explainable parts: {SCORE_WEIGHTS.historical}%
+              The overall threat score consists of three parts: {SCORE_WEIGHTS.historical}%
               history, {SCORE_WEIGHTS.live}% live conditions and {SCORE_WEIGHTS.wildfireModel}% a wildfire
               model. History and live conditions are blended inside each hazard&apos;s own score, so every
               hazard bar is half history and half live. The hazards are then combined, weighted toward the
