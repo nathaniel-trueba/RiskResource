@@ -9,6 +9,7 @@ import MapControls, { Measure } from '@/components/map/MapControls';
 import MapLegend from '@/components/map/MapLegend';
 import StateInspector from '@/components/map/StateInspector';
 import CountyInspector from '@/components/map/CountyInspector';
+import ExpectedLossSection from '@/components/map/ExpectedLossSection';
 import type { MapFocus } from '@/components/map/RiskLeafletMap';
 import { fetchCounty, fetchMapValues, fetchState, HazardKey, MapMetric, searchCounties } from '@/lib/api';
 import { formatPct, formatUsd } from '@/lib/format';
@@ -47,7 +48,7 @@ export default function RiskMapPage() {
   const [hazard, setHazard] = useState<HazardKey | null>(null); // null: all hazards
   const [selectedState, setSelectedState] = useState<StateRecord | null>(null);
   const [selectedCounty, setSelectedCounty] = useState<CountyRecord | null>(null);
-  // Area the map is zoomed to: a state after "View county breakdown", or a county
+  // Area the map is zoomed to: a state after "Zoom Into Counties", or a county
   // opened from a homepage search. Null: national view.
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [loading, setLoading] = useState(true); // The first area loads on mount
@@ -182,7 +183,7 @@ export default function RiskMapPage() {
     }
   };
 
-  // Called when clicking "View county breakdown": show the county map zoomed to the
+  // Called when clicking "Zoom Into Counties": show the county map zoomed to the
   // state, and keep the state panel until a county is clicked.
   const handleDrillDownToCounties = () => {
     setViewMode('counties');
@@ -240,6 +241,8 @@ export default function RiskMapPage() {
     return `<b>${formatPct(value.value)}</b> of residents in high-loss counties`;
   };
 
+  const activeCounty = viewMode === 'counties' ? selectedCounty : null;
+
   return (
     <div className="min-h-screen bg-[#fcfbf7] text-[#111827] dark:bg-[#11100e] dark:text-[#f3f4f6] flex flex-col justify-between transition-colors duration-200">
       <Navigation />
@@ -266,38 +269,58 @@ export default function RiskMapPage() {
           </p>
         )}
 
-        <div className="flex flex-col lg:flex-row gap-6 mt-4">
-          {/* self-start: keep this box the map's height even when the side panel is
-              taller, so the legend stays pinned to the map's bottom-left corner */}
-          <div className="flex-1 relative self-start w-full">
-            <RiskLeafletMap
-              viewMode={viewMode}
-              values={currentValues}
-              valuesKey={valuesKey}
-              colorFor={(value) => bandColor(value, bands)}
-              describe={describe}
-              onSelectFeature={handleFeatureSelect}
-              onClearSelection={handleClearSelection}
-              selectedId={
-                viewMode === 'counties'
-                  ? selectedCounty?.fips ?? null
-                  : selectedState?.code ?? null
-              }
-              focus={focus}
-            />
-            <MapLegend title={legend.title} bands={bands} note={legend.note} />
+        <div className="flex flex-col lg:flex-row gap-6 mt-4 items-start">
+          {/* Left Column: Map + Map-Width FEMA Loss Panel */}
+          <div className="flex-1 min-w-0 w-full">
+            <div className="relative w-full">
+              <RiskLeafletMap
+                viewMode={viewMode}
+                values={currentValues}
+                valuesKey={valuesKey}
+                colorFor={(value) => bandColor(value, bands)}
+                describe={describe}
+                onSelectFeature={handleFeatureSelect}
+                onClearSelection={handleClearSelection}
+                selectedId={
+                  viewMode === 'counties'
+                    ? selectedCounty?.fips ?? null
+                    : selectedState?.code ?? null
+                }
+                focus={focus}
+              />
+              <MapLegend title={legend.title} bands={bands} note={legend.note} />
+            </div>
+
+            {/* FEMA Expected Annual Loss — exact same width as RiskLeafletMap */}
+            <div className={loading ? 'opacity-60 transition-opacity' : ''}>
+              {activeCounty ? (
+                <ExpectedLossSection
+                  loss={activeCounty.expectedLoss}
+                  kind="county"
+                  areaName={`${activeCounty.name}, ${activeCounty.state}`}
+                  stateCode={activeCounty.stateCode}
+                />
+              ) : selectedState ? (
+                <ExpectedLossSection
+                  loss={selectedState.expectedLoss}
+                  kind="state"
+                  areaName={selectedState.name}
+                  stateCode={selectedState.code}
+                />
+              ) : null}
+            </div>
           </div>
 
-          {/* Conditional Sidebar: Shows County details if in county mode, State details otherwise */}
-          <div className={`relative ${loading ? 'opacity-60 transition-opacity' : ''}`}>
+          {/* Right Sidebar: Expands downward independently without pushing FEMA stats */}
+          <div className={`relative shrink-0 w-full lg:w-88 ${loading ? 'opacity-60 transition-opacity' : ''}`}>
             {error && (
-              <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 dark:text-red-200 dark:bg-red-950/50 dark:border-red-900/60 rounded-xl lg:w-88">
+              <p className="mb-3 p-3 text-xs text-red-900 bg-red-50 border border-red-200 dark:text-red-200 dark:bg-red-950/50 dark:border-red-900/60 rounded-xl">
                 {error}. Is the backend running?
               </p>
             )}
-            {viewMode === 'counties' && selectedCounty ? (
+            {activeCounty ? (
               <CountyInspector
-                county={selectedCounty}
+                county={activeCounty}
                 onBackToState={showAllStates}
               />
             ) : selectedState ? (
@@ -306,7 +329,7 @@ export default function RiskMapPage() {
                 onDrillDown={handleDrillDownToCounties}
               />
             ) : (
-              <aside className="w-full lg:w-88 bg-white border border-gray-200/90 dark:bg-[#181613] dark:border-white/10 rounded-2xl p-6 text-xs text-gray-500 dark:text-gray-400">
+              <aside className="w-full bg-white border border-gray-200/90 dark:bg-[#181613] dark:border-white/10 rounded-2xl p-6 text-xs text-gray-500 dark:text-gray-400">
                 {error
                   ? 'No data to show.'
                   : loading
