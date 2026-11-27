@@ -53,7 +53,7 @@ boto3 (AWS's Python library) reads the last three automatically.
 
 ## 3. One code change
 
-Add `boto3` to `backend/requirements.txt` (and `pyproject.toml` if you use it), so Railway installs it. Nothing else changes: `open_store` sees the `s3://` prefix and uses `S3Store`.
+`boto3` must be in `backend/requirements.txt`, which is what Railway installs from. **Done:** `boto3==1.44.12` is there on `feature/add-model-scoring`, so it arrives with the merge to `main`. Nothing else changes: `open_store` sees the `s3://` prefix and uses `S3Store`.
 
 ## 4. Check it
 

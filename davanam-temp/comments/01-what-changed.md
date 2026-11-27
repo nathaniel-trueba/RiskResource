@@ -24,12 +24,10 @@
 - **Map:** the legend and "Show" dropdown mention the 40/40/20 split.
 - **Homepage score card:** notes the model's share.
 - **About page:**
-  - Three architecture cards: history, live and wildfire model.
-  - **Two sliders, clearly separated:**
-    - "How a score is built" shows our actual 40/40/20 formula.
-    - The FEMA-style slider from `main` is kept as "How FEMA rates long-term risk", labelled as not part of our score.
   - Data source cards rewritten to the 8 sources we actually use. Removed HRRR, NIFC and ShakeMap; added Open-Meteo, NOAA river gauges and Census.
-  - The bottom table now shows the real live-signal scores, for example Red Flag Warning = 100.
+  - The live-signal table shows the real scores from the backend, for example Red Flag Warning = 100.
+  - The 40/40/20 slider ("Try It Yourself") uses our actual formula.
+  - After merging the latest `main`, the page uses the team's rework: a Step 1 → 2 → 3 score diagram (50/50 → 60/40 → 80/20), a restyled live-signal table and simpler slider text. The FEMA rating panel (`NriExplainer`) is hidden there for now; the component is still in the repo.
 - **Homepage cards:** corrected the "Built on public data", "See your biggest hazards" and "Live hazard alerts" text.
 
 ### AWS Lambda: now an NWS alert archive

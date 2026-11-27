@@ -20,7 +20,7 @@ Today the backend reads the scores from `data/wildfire_model.json` in the repo, 
 
 ### 1. A code change (done in the repo, not in Railway)
 
-The backend needs `boto3`, AWS's Python library, to read S3. Someone with repo access adds it to `backend/requirements.txt` and `backend/pyproject.toml`, refreshes `backend/uv.lock`, and merges to `main`. Both files are updated because we don't know which of the two Railway builds from. Nothing needs installing in Railway itself.
+The backend needs `boto3`, AWS's Python library, to read S3. **Done on `feature/add-model-scoring`:** `boto3==1.44.12` is in `backend/requirements.txt`, which is what Railway installs from (`pyproject.toml` and `uv.lock` are git-ignored, so Railway never sees them). It reaches Railway when the branch is merged to `main`. Nothing needs installing in Railway itself.
 
 ### 2. Variables
 
@@ -45,5 +45,5 @@ After the redeploy, open `/api/health`:
 | When | What | Who |
 |---|---|---|
 | Now | `ALERT_ARCHIVE_MAX_AGE_MINUTES=30` | Railway owner |
-| Before round 2 | Add `boto3` to the backend's dependencies, merge to `main` | Anyone with repo access |
+| Before round 2 | Merge `feature/add-model-scoring` (which adds `boto3`) to `main` | Anyone with repo access |
 | Round 2 | `WILDFIRE_MODEL_URI`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | Railway owner, with the key sent privately |

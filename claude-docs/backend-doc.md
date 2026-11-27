@@ -350,7 +350,7 @@ python -m ml.wildfire.predict_week
 **Moving the job to AWS.** The job and the API only share [`weekly_scores/`](../backend/weekly_scores/__init__.py): the document format (`contract.py`) and where it's stored (`store.py`). To migrate:
 
 1. Run the job on a weekly schedule with `WILDFIRE_MODEL_URI=s3://<bucket>/<key>`. The planned setup is a Step Functions state machine ([`aws/wildfire_state_machine.json`](../backend/aws/wildfire_state_machine.json)) that runs three Lambdas from [`aws/wildfire_steps.py`](../backend/aws/wildfire_steps.py): download the weather in 8 chunks, build the features, then run the model and publish. It's split because the whole job takes about 30 minutes, over Lambda's 15. There's no SageMaker: the model takes under a second. Alternatively, [`ml/wildfire/handler.py`](../backend/ml/wildfire/handler.py) runs the job in one go on a container service with no time limit, such as Fargate.
-2. Set the API's `WILDFIRE_MODEL_URI` to the same `s3://` URI, add `boto3` to `requirements.txt`, and give the API `s3:GetObject` on that key.
+2. Set the API's `WILDFIRE_MODEL_URI` to the same `s3://` URI, and give the API `s3:GetObject` on that key. `boto3` is already in `requirements.txt` for this.
 
 No scoring code changes. To store it somewhere else, such as Supabase, add a store class with `version`, `read`, `write` and `describe`.
 

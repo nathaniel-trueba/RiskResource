@@ -108,7 +108,7 @@ A simpler alternative is running the existing job unchanged in one container on 
 The website (Next.js on Vercel) only changed what it shows:
 
 - A **Wildfire Model · 20% of Score** section in the county and state panels.
-- The 40/40/20 explanation and slider on the About page, with FEMA's own rating shown separately and labelled as not part of our score.
+- The 40/40/20 explanation on the About page: a Step 1 → 2 → 3 diagram (50/50 per hazard → 60/40 across hazards → 80/20 with the model) and a "Try It Yourself" slider. The FEMA rating panel (`NriExplainer`) is currently hidden on `main`; the component is still in the repo.
 - Accurate data source cards and live-signal thresholds on the About page.
 
 Its weights come from `frontend/lib/scoring.ts`, which mirrors the backend's.

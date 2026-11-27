@@ -9,4 +9,4 @@ pyarrow==26.0.1
 shapely==2.2.0
 httpx==0.28.1
 numpy==2.5.4
-boto3
+boto3==1.44.12
