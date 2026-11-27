@@ -134,6 +134,15 @@ CREATE TABLE IF NOT EXISTS public.api_config (
   enabled        boolean NOT NULL DEFAULT true,
   updated_at     timestamptz DEFAULT now()
 );
+-- NWS rejects requests without a User-Agent. Existing rows are left alone.
+INSERT INTO public.api_config (name, base_url, default_params, headers)
+VALUES (
+  'nws_alerts',
+  'https://api.weather.gov/alerts/active',
+  '{}'::jsonb,
+  '{"User-Agent": "UCSD-Risk-Resource-NotForProfit", "Accept": "application/geo+json"}'::jsonb
+)
+ON CONFLICT (name) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS public.nws_alert_archive (
   id            text PRIMARY KEY,           -- NWS alert ID. Each update has its own ID

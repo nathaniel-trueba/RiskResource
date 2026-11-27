@@ -2,7 +2,7 @@
 
 Today the backend reads `backend/data/wildfire_model.json` from its deployed code, so a new week means a commit and a redeploy. Once the pipeline publishes to S3, the backend can read from there instead and pick up each new week within a minute, with no redeploy.
 
-The code for this already exists (`weekly_scores/store.py`, `S3Store`). It just needs credentials and one setting.
+The code for this already exists (`weekly_scores/store.py`, `S3Store`). It just needs credentials and one setting. The Railway side of this (variables, plus the `boto3` dependency) is also in [../railway-changes.md](../railway-changes.md), for whoever owns the Railway project.
 
 ## 1. An IAM user for Railway
 
@@ -47,7 +47,7 @@ Railway → the backend service → Variables:
 | `WILDFIRE_MODEL_URI` | `s3://<bucket>/wildfire/latest.json` |
 | `AWS_ACCESS_KEY_ID` | The key from step 1 |
 | `AWS_SECRET_ACCESS_KEY` | The secret from step 1 |
-| `AWS_DEFAULT_REGION` | `us-east-1` |
+| `AWS_DEFAULT_REGION` | `us-west-2` |
 
 boto3 (AWS's Python library) reads the last three automatically.
 

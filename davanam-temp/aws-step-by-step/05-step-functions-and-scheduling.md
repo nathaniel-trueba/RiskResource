@@ -4,125 +4,20 @@
 
 A **state machine** is a JSON document (in "Amazon States Language") listing the steps, what each one runs, and what happens on errors. You can draw it in the console's visual editor (Workflow Studio), which writes the JSON for you, or paste JSON in. Below is the full definition with every setting explained.
 
-**Type: Standard**, not Express. Standard workflows can run for up to a year and can wait for a SageMaker job to finish (`.sync`). Express workflows are capped at 5 minutes. Standard costs $0.025 per 1,000 state transitions; a weekly run has about 30, so it's effectively free (4,000 free a month).
+**Type: Standard**, not Express. Standard workflows can run for up to a year, and the weekly run takes about 45 minutes. Express workflows are capped at 5 minutes. Standard costs $0.025 per 1,000 state transitions; a weekly run has about 20, so it's effectively free (4,000 free a month).
 
 ## The definition
 
-Replace `<account>`, `<region>` and `<bucket>`. The SageMaker step assumes you went that way (06). The version without it follows.
+It's in **`backend/aws/wildfire_state_machine.json`**. Paste it into Step Functions → Create state machine → "Code" view as is. It has no placeholders: it refers to the Lambdas by name (`wildfire-fetch-chunk` and so on), so the names you give them in 04 must match.
 
-```json
-{
-  "Comment": "Weekly wildfire scores: download, features, inference, publish",
-  "StartAt": "DownloadWeather",
-  "States": {
-    "DownloadWeather": {
-      "Type": "Map",
-      "ItemsPath": "$.chunks",
-      "ItemSelector": {
-        "chunk.$": "$$.Map.Item.Value",
-        "of": 8,
-        "startTime.$": "$$.Execution.StartTime"
-      },
-      "MaxConcurrency": 1,
-      "ItemProcessor": {
-        "ProcessorConfig": { "Mode": "INLINE" },
-        "StartAt": "FetchChunk",
-        "States": {
-          "FetchChunk": {
-            "Type": "Task",
-            "Resource": "arn:aws:states:::lambda:invoke",
-            "Parameters": {
-              "FunctionName": "wildfire-fetch-chunk",
-              "Payload.$": "$"
-            },
-            "ResultSelector": { "cells.$": "$.Payload.cells" },
-            "Retry": [
-              {
-                "ErrorEquals": ["Throttled"],
-                "IntervalSeconds": 60,
-                "BackoffRate": 2,
-                "MaxAttempts": 5,
-                "JitterStrategy": "FULL"
-              },
-              {
-                "ErrorEquals": ["States.Timeout", "Lambda.ServiceException", "Lambda.TooManyRequestsException", "States.TaskFailed"],
-                "IntervalSeconds": 30,
-                "BackoffRate": 2,
-                "MaxAttempts": 3
-              }
-            ],
-            "End": true
-          }
-        }
-      },
-      "ResultPath": null,
-      "Next": "BuildFeatures",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }]
-    },
+The flow:
 
-    "BuildFeatures": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "wildfire-build-features",
-        "Payload": { "startTime.$": "$$.Execution.StartTime" }
-      },
-      "ResultSelector": { "week.$": "$.Payload.week", "featuresUri.$": "$.Payload.featuresUri" },
-      "ResultPath": "$.features",
-      "Retry": [{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": 120, "BackoffRate": 2, "MaxAttempts": 2 }],
-      "Next": "Inference",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }]
-    },
-
-    "Inference": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::sagemaker:createTransformJob.sync",
-      "Parameters": {
-        "TransformJobName.$": "States.Format('wildfire-{}', $$.Execution.Name)",
-        "ModelName": "wildfire-xgboost",
-        "TransformInput": {
-          "DataSource": { "S3DataSource": { "S3DataType": "S3Prefix", "S3Uri.$": "$.features.featuresUri" } },
-          "ContentType": "text/csv",
-          "SplitType": "Line"
-        },
-        "TransformOutput": {
-          "S3OutputPath.$": "States.Format('s3://<bucket>/predictions/{}/', $.features.week)",
-          "AssembleWith": "Line"
-        },
-        "TransformResources": { "InstanceType": "ml.m5.large", "InstanceCount": 1 }
-      },
-      "ResultPath": null,
-      "Retry": [{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": 300, "MaxAttempts": 1 }],
-      "Next": "CalibrateAndPublish",
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }]
-    },
-
-    "CalibrateAndPublish": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "wildfire-calibrate-publish",
-        "Payload": { "week.$": "$.features.week" }
-      },
-      "Retry": [{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": 60, "BackoffRate": 2, "MaxAttempts": 3 }],
-      "End": true,
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }]
-    },
-
-    "NotifyFailure": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::sns:publish",
-      "Parameters": {
-        "TopicArn": "arn:aws:sns:<region>:<account>:riskresource-alerts",
-        "Subject": "Weekly wildfire scores failed",
-        "Message.$": "States.Format('Execution {} failed: {}', $$.Execution.Name, States.JsonToString($.error))"
-      },
-      "Next": "Failed"
-    },
-
-    "Failed": { "Type": "Fail", "Error": "WeeklyRunFailed" }
-  }
-}
+```
+DownloadWeather (Map over $.chunks, one at a time)
+  └─ FetchChunk  → Lambda wildfire-fetch-chunk
+BuildFeatures        → Lambda wildfire-build-features
+CalibrateAndPublish  → Lambda wildfire-calibrate-publish (runs the model, publishes)
+Any failure (after its retries) → the run fails, shown red in the console
 ```
 
 ### Each part, in plain terms
@@ -133,40 +28,28 @@ Replace `<account>`, `<region>` and `<bucket>`. The SageMaker step assumes you w
 - **`MaxConcurrency: 1`** is the rate limiter: one chunk at a time, 60 requests a minute overall. Only raise it to 2 if you've seen POWER tolerate ~120 a minute.
 - `ResultPath: null` throws away the chunks' outputs so they don't bloat the next step's input. Their real output is the files in S3.
 
-**`FetchChunk`'s `Retry`** is where rate limiting is handled:
+**`FetchChunk`'s `Retry`** is where rate limiting is handled. Retriers are checked in order, and the first match applies:
 
 - `Throttled` (raised by our code when POWER returns 429): wait 60 s, then 120, 240, 480, 960 (`BackoffRate: 2`, up to 5 attempts). `JitterStrategy: FULL` randomizes each wait a bit, so retries don't line up.
-- Lambda's own hiccups and timeouts: retry 3 times starting at 30 s.
+- `ChunkIncomplete` (the chunk ran out of time, or too many cells failed): retry after 10 s, up to 4 times. Each retry carries on where the last one stopped.
+- Lambda's own hiccups: retry 3 times starting at 30 s. That covers the function hitting its 15-minute timeout (`Sandbox.Timedout`), crashing, for example running out of memory (`Lambda.Unknown`), and AWS-side errors (`Lambda.ServiceException` and the like). The timeout shouldn't normally happen, because `fetch_chunk` stops itself 90 seconds early.
 - Because downloads already in S3 are skipped, each retry only fetches what's missing.
 
-**`BuildFeatures`.** One Lambda: the forecast plus features. It returns the week and where it wrote the CSV, saved under `$.features` for the next steps to use.
+**`BuildFeatures`.** One Lambda: the forecast plus features. It returns the week and where it wrote the CSV, saved under `$.features` for the last step to use. Retries twice, 2 and 4 minutes apart (Open-Meteo hiccups).
 
-**`Inference` (SageMaker).** `createTransformJob.sync` starts a Batch Transform job, and **`.sync` makes Step Functions wait until the job finishes**, polling for you. Without `.sync` it would start the job and move straight on.
+**`CalibrateAndPublish`.** Gets the week from `$.features.week`, runs the model on the features (under a second for 3,221 counties), calibrates, attaches county codes, and writes the weekly copy and then `latest.json`. Retries 3 times starting at 60 s. Rerunning it is safe: it just rewrites the same two files.
 
-- `TransformJobName` must be unique per job, so it includes the execution name.
-- `SplitType: Line` sends the CSV row by row. `AssembleWith: Line` writes one prediction per line, in the same order.
-
-**`CalibrateAndPublish`.** Reads the predictions, calibrates, attaches county codes, writes `latest.json` and the weekly copy.
-
-**`Catch` → `NotifyFailure`.** If any step fails after its retries, Step Functions emails the SNS topic, then marks the run failed (`Failed`), so it shows red in the console.
-
-### Without SageMaker
-
-Delete the `Inference` state, point `BuildFeatures`' `Next` at `CalibrateAndPublish`, and have `calibrate_and_publish` run the model itself (load `model.json`, `predict`, then calibrate). Everything else is identical.
+**Failures.** There's no failure email. If a step still fails after its retries, the whole run fails with that step's error and shows red in the console: Step Functions → the state machine → Executions → the failed run → the red step → its error and cause. Check this after each Monday run, or look at `/api/health`, whose `wildfireModel` week stops advancing when runs fail. The site keeps using the last good week until it's 13 days old, so a missed week isn't urgent.
 
 ## The state machine's role
 
-Step Functions → Create state machine → paste the JSON → let it create a role, then add to that role:
+Step Functions → Create state machine → paste the JSON → let it create a role. It needs only one permission:
 
 | Permission | On | Why |
 |---|---|---|
-| `lambda:InvokeFunction` | The three wildfire Lambdas | To run each step |
-| `sns:Publish` | `riskresource-alerts` | Failure emails |
-| `sagemaker:CreateTransformJob`, `DescribeTransformJob`, `StopTransformJob` | `*` (transform jobs) | Only if using SageMaker |
-| `events:PutTargets`, `events:PutRule`, `events:DescribeRule` | `arn:aws:events:<region>:<account>:rule/StepFunctionsGetEventsForSageMakerTransformJobsRule` | `.sync` uses this AWS-managed rule to hear when the job finishes |
-| `iam:PassRole` | The SageMaker execution role (06) | To hand SageMaker its own role |
+| `lambda:InvokeFunction` | The three wildfire Lambdas (`arn:aws:lambda:<region>:<account>:function:wildfire-*`) | To run each step |
 
-When the console builds the role from your definition, it usually adds most of these for you. Check the list anyway.
+The console reads the Lambda names from the definition and usually adds this for you. Check the role afterwards. If it's missing, a run fails at the first step with `AccessDenied`.
 
 **Logging:** in the state machine's settings, set logging to **ERROR** (just failures) and send it to a log group, then set that log group's retention to 30 days (08). **ALL** logs every step's input and output, which is useful while building but noisy afterwards.
 
@@ -190,4 +73,4 @@ EventBridge → Scheduler → Create schedule:
 
 **Running it by hand** (for testing, or to redo a week): Step Functions → the state machine → Start execution → the same input. A run started on a Wednesday still scores that week's Monday, because each step works the week out from the start time.
 
-**Don't let two runs overlap.** A weekly run takes about 45 minutes, so overlap only happens if you start one by hand during a scheduled run. The reserved concurrency of 1 on `wildfire-fetch-chunk` (04) keeps the request rate safe even then. The second run's chunk Lambdas would just get throttled and retried.
+**Don't let two runs overlap.** A weekly run takes about 45 minutes, so overlap only happens if you start one by hand during a scheduled run. Before starting one by hand, check the state machine's executions list for one already running. Two at once would double the request rate to NASA POWER, causing 429s. The `Throttled` retries would mostly absorb those, but it's slower and messier.

@@ -1,0 +1,12 @@
+# What the weekly wildfire pipeline's Lambdas need (aws/wildfire.Dockerfile).
+# requirements-ml.txt without the notebook packages, plus boto3. Keep the versions
+# in step with requirements-ml.txt, especially xgboost: the model was saved with it.
+xgboost==3.4.1
+scikit-learn==1.9.1
+scipy==1.18.1
+pandas==3.1.1
+pyarrow==26.0.1
+shapely==2.2.0
+httpx==0.28.1
+numpy==2.5.4
+boto3

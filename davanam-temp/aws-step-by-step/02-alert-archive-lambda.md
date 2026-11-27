@@ -18,9 +18,11 @@ The new Lambda writes to new tables, and the old Lambda writes to tables that ge
    SELECT name, enabled FROM public.api_config;                          -- only nws_alerts
    ```
 
-What it did: created `nws_alert_archive` and `archive_settings`, copied the past year of alerts from the old `weather_alerts` table into the slim format, removed the `api_config` rows for APIs the Lambda no longer calls, and dropped the old tables (`weather_alerts`, `earthquakes`, `gauges`, `weather_observations`, `locations`).
+What it did: created `nws_alert_archive` and `archive_settings` (if the backend hadn't already), copied any alerts from the old `weather_alerts` table into the slim format, removed the `api_config` rows for APIs the Lambda no longer calls, **added the `nws_alerts` row the Lambda needs**, and dropped the old tables (`weather_alerts`, `earthquakes`, `gauges`, `weather_observations`, `locations`).
 
-The `nws_alerts` row in `api_config` must have a `User-Agent` in its `headers`. NWS rejects requests without one. It should already have one, but check.
+As of 2026-11-26 the old tables and `api_config` were all empty, so nothing is lost by dropping them. The empty `api_config` is likely why the old Lambda wrote nothing: it reads its API settings from that table.
+
+The `nws_alerts` row's `headers` include a `User-Agent` (`UCSD-Risk-Resource-NotForProfit`), which NWS requires. To change it, edit the row in the Table Editor. The Lambda reads it fresh on every run.
 
 ## Step 2: Package the code (a zip file)
 
@@ -57,7 +59,7 @@ Then:
    - **Memory: 256 MB.** It processes about 700 alerts; 128 MB works but runs slower.
    - **Timeout: 60 seconds.** A run takes a few seconds. The default 3 seconds is too short. 60 leaves room for NWS being slow (each request waits up to 20 seconds, with retries).
 4. **Configuration → Environment variables:** `DATABASE_URL` = the Supabase **session pooler** connection string, without quotes.
-5. **Configuration → Concurrency → Reserved concurrency: 1.** At most one copy runs at a time, so a slow run and the next scheduled one can't overlap and write the same rows at once.
+5. **Reserved concurrency: leave it unset.** New AWS accounts can only run about 10 Lambdas at once, and AWS refuses any reservation that would leave fewer than 100 unreserved, so it can't be set anyway. It isn't needed: a run takes a few seconds and runs are 15 minutes apart, and if two ever overlapped, they'd write the same rows with the same values.
 6. **Don't attach it to a VPC.** Outside a VPC, Lambda has internet access by default. Inside one, it would need a NAT gateway (about $30 a month) to reach NWS and Supabase.
 
 **Test it before scheduling:** Test tab → new event `{"dry_run": true}` → Test. It fetches and maps without writing, and returns a summary with `alerts_fetched`, `alerts_archived` and an `example_row`. Then run `{}` once for real and check Supabase:
@@ -94,7 +96,7 @@ The backend only uses the archive's copy if the Lambda's last run is recent enou
 ALERT_ARCHIVE_MAX_AGE_MINUTES=30
 ```
 
-That's a 15-minute schedule plus slack for one missed run. (The default, 90, was for hourly runs.)
+That's a 15-minute schedule plus slack for one missed run. (The default, 90, was for hourly runs.) Every Railway change is listed in [../railway-changes.md](../railway-changes.md) for whoever owns the Railway project.
 
 ## Step 6: Keep logs and data to a fixed window
 
@@ -119,15 +121,14 @@ Each run logs one summary line of about 1 KB, so 15-minute runs make about 3 MB 
 
 - If there's no `archive_settings` row, the Lambda deletes nothing and logs a warning. It never guesses a retention period.
 
-## Step 7: An alarm for failures
+## Step 7: Checking it's healthy (no alarm)
 
-The Lambda raises an error when something goes wrong (NWS down, database unreachable), so failures show up in CloudWatch's `Errors` metric.
+There's no failure email in this setup. The Lambda raises an error when something goes wrong (NWS down, database unreachable), so to check on it:
 
-CloudWatch → Alarms → Create alarm → Lambda → By function name → `nws-alert-archive` → **Errors**:
+- **Lambda → `nws-alert-archive` → Monitor:** the **Errors** graph should be at or near zero. One failed run now and then is normal (NWS hiccups).
+- **Supabase:** `SELECT last_run_at FROM public.archive_settings;` should be within the last 15 minutes or so.
 
-- **Statistic:** Sum. **Period:** 1 hour.
-- **Condition:** greater than or equal to **3**. One failed run is normal (NWS hiccups). Three in an hour is a real problem.
-- **Action:** send to the `riskresource-alerts` SNS topic.
+If it stops running, the site isn't affected unless NWS is also down. The backup just isn't used once it's more than 30 minutes old.
 
 ## Settings summary
 
@@ -136,12 +137,11 @@ CloudWatch → Alarms → Create alarm → Lambda → By function name → `nws-
 | Lambda | Runtime / architecture | Python 3.13 / x86_64 |
 | Lambda | Handler | `lambda_function.lambda_handler` |
 | Lambda | Memory / timeout | 256 MB / 60 s |
-| Lambda | Reserved concurrency | 1 |
+| Lambda | Reserved concurrency | Unset |
 | Lambda | Environment | `DATABASE_URL` |
 | Lambda | VPC | None |
 | Scheduler | Expression | `rate(15 minutes)`, flexible window off |
 | Scheduler | Retry | Max event age 10 min, 2 retries |
 | CloudWatch | Log retention | 30 days |
-| CloudWatch | Alarm | Errors ≥ 3 per hour → SNS |
 | Supabase | `archive_settings.retention_days` | 365 |
 | Railway | `ALERT_ARCHIVE_MAX_AGE_MINUTES` | 30 |

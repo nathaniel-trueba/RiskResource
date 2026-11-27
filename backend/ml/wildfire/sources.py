@@ -360,6 +360,8 @@ def fetch_power_cell(
     start=WEATHER_START,
     end=WEATHER_END,
     pacer: _Pacer | None = None,
+    attempts: int = 6,
+    backoff: float = 60,
 ) -> pd.DataFrame:
     """Download daily NASA POWER weather for one point.
 
@@ -373,13 +375,16 @@ def fetch_power_cell(
         start: First date (datetime.date). Defaults to WEATHER_START.
         end: Last date, inclusive. Defaults to WEATHER_END.
         pacer: Optional shared rate limiter.
+        attempts: Total tries. The default suits a long local run; the AWS step
+            uses 1, so a rate limit fails fast and Step Functions retries later.
+        backoff: Seconds to wait after the first failure. Doubles after each one.
     Returns:
         DataFrame indexed by date ("date"), one float32 column per POWER_PARAMETERS
         entry, with POWER's -999 fill values replaced by NaN.
     Raises:
         httpx.HTTPError: If every attempt fails.
-    Called by: download_power_cells. predict_week.fetch_power calls it with a recent
-    start and end for the observed days before a live week.
+    Called by: download_power_cells, predict_week.fetch_power (recent days before a
+    live week), and aws/wildfire_steps.fetch_chunk.
     """
     data = _get_json(
         client,
@@ -395,8 +400,8 @@ def fetch_power_cell(
         },
         # POWER sits behind a CloudFront rate limit that answers 429 with no
         # Retry-After once you go much above ~100 requests a minute.
-        attempts=6,
-        backoff=60,
+        attempts=attempts,
+        backoff=backoff,
         pacer=pacer,
     )
     parameters = data["properties"]["parameter"]

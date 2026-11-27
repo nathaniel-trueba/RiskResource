@@ -22,8 +22,7 @@ EventBridge Scheduler (Mondays 06:00 UTC)
 Step Functions state machine
   1. Download weather in chunks (Lambda × ~8, one or two at a time)  ──▶ S3 raw/
   2. Forecast + features (Lambda)                                    ──▶ S3 features/
-  3. Model inference (SageMaker Batch Transform, or a Lambda)        ──▶ S3 predictions/
-  4. Calibrate + publish (Lambda)                                    ──▶ S3 wildfire/latest.json
+  3. Run the model, calibrate, publish (Lambda)                      ──▶ S3 wildfire/latest.json
         │
         ▼
 Railway backend reads s3://.../wildfire/latest.json
@@ -33,22 +32,22 @@ Railway backend reads s3://.../wildfire/latest.json
 
 | File | What's in it |
 |---|---|
-| [01-aws-basics-and-setup.md](01-aws-basics-and-setup.md) | One-time setup: region, IAM users vs roles, the AWS CLI, the S3 bucket, secrets, an email alert topic, a budget |
+| [01-aws-basics-and-setup.md](01-aws-basics-and-setup.md) | One-time setup: region, IAM users vs roles, the AWS CLI, the S3 bucket, secrets, a budget |
 | [02-alert-archive-lambda.md](02-alert-archive-lambda.md) | Pipeline 1 end to end: migration, packaging, Lambda settings, the 15-minute schedule, retention, verifying |
-| [03-wildfire-pipeline-design.md](03-wildfire-pipeline-design.md) | Pipeline 2's design: why it's split into steps, the rate-limit problem, S3 layout, the code that still needs writing |
+| [03-wildfire-pipeline-design.md](03-wildfire-pipeline-design.md) | Pipeline 2's design: why it's split into steps, the rate-limit problem, S3 layout, and what each Lambda handler does |
 | [04-packaging.md](04-packaging.md) | Getting Python code with big libraries into Lambda: zip files vs container images, Docker, ECR |
 | [05-step-functions-and-scheduling.md](05-step-functions-and-scheduling.md) | The state machine for pipeline 2, every setting explained, and the weekly schedule |
-| [06-sagemaker-or-not.md](06-sagemaker-or-not.md) | What Batch Transform is, why it's probably overkill here, and how to set it up if you use it anyway |
+| [06-sagemaker-or-not.md](06-sagemaker-or-not.md) | Why the pipeline doesn't use SageMaker (decided: it doesn't) |
 | [07-connecting-railway-to-s3.md](07-connecting-railway-to-s3.md) | Letting the Railway backend read the published file |
-| [08-logs-retention-monitoring-costs.md](08-logs-retention-monitoring-costs.md) | Keeping logs and stored data to a fixed window, alarms, and what it all costs |
+| [08-logs-retention-monitoring-costs.md](08-logs-retention-monitoring-costs.md) | Keeping logs and stored data to a fixed window, checking health by hand, and what it all costs |
 
 ## Build order
 
 1. **01** once.
 2. **02**, the alert archive. It's small and nearly done, and it's good practice for the bigger one.
-3. **03**, then **04** and **05**, for the wildfire pipeline. Decide on SageMaker with **06** before building step 3.
+3. **03**, then **04** and **05**, for the wildfire pipeline. (06 only records why there's no SageMaker; nothing to build.)
 4. **07**, to switch the backend from the committed file to S3.
-5. **08**, as you go: set log retention and alarms for each piece when you create it.
+5. **08**, as you go: set log retention for each piece when you create it.
 
 ## Words used throughout
 
@@ -66,5 +65,6 @@ Railway backend reads s3://.../wildfire/latest.json
 | Alert archive Lambda code, schema, migration | Written and tested offline. Not deployed |
 | Backend reading from S3 (`WILDFIRE_MODEL_URI=s3://...`) | Written. Not tested against real S3 |
 | `ml/wildfire/handler.py` (one-shot job entry point) | Written. Works on a container service (Fargate), not on Lambda (it runs ~30 min) |
-| Chunked downloads, S3 download cache, features export, calibrate-and-publish Lambda | **Not written.** Listed in 03 |
-| Everything in AWS (bucket, roles, functions, schedules, state machine) | **Not created** |
+| Pipeline Lambdas (`backend/aws/wildfire_steps.py`: `fetch_chunk`, `build_features`, `calibrate_and_publish`) | Written and tested offline against a stand-in for S3. Scores match `predict_week` exactly |
+| Dockerfile, pipeline requirements, state machine definition (`backend/aws/`) | Written. The Dockerfile hasn't been built yet |
+| Everything in AWS (bucket, roles, functions, schedules, state machine) | **Not created.** That's the remaining work, and it's all configuration |

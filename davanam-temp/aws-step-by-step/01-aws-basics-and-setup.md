@@ -4,7 +4,7 @@ Do this once. Everything else builds on it.
 
 ## Pick a region
 
-Use **us-east-1 (N. Virginia)** for everything. Supabase is in US East, so the Lambdas talk to the database with low latency, and us-east-1 has every service and the lowest prices.
+Use **us-west-2 (Oregon)** for everything in AWS: the bucket, the Lambdas, ECR, Step Functions and the schedules must all be in the same region, and the console only shows resources in the region selected at the top right. Supabase is in us-west-2, so the alert archive Lambda talks to it across the country (about 70 ms per round trip). That adds well under a second to a run, so it works fine; moving one of them is optional later.
 
 In the console, the region picker is at the top right. Check it every time you create something: a resource made in the wrong region is invisible from the right one, which is the most common "where did my Lambda go?" moment.
 
@@ -23,7 +23,7 @@ Two kinds of identities, used for different things:
 
 | | IAM role | IAM user with access keys |
 |---|---|---|
-| For | AWS services acting on your behalf: a Lambda, a state machine, a scheduler, SageMaker | Things outside AWS: your laptop's CLI, Railway |
+| For | AWS services acting on your behalf: a Lambda, a state machine, a scheduler | Things outside AWS: your laptop's CLI, Railway |
 | How it gets credentials | AWS hands it temporary credentials automatically | You create an access key and paste it somewhere |
 | Risk | Low: nothing to leak | Keys can leak. Give them the smallest possible permissions |
 
@@ -45,9 +45,76 @@ A policy is JSON like this. This one lets something read one file:
 You can do everything in the console, but a few steps (Docker image pushes, log retention in bulk) are much easier from the command line.
 
 1. Install AWS CLI v2 from the AWS docs.
-2. In IAM, create an access key for your admin user (Users → you → Security credentials → Create access key → "Command Line Interface").
-3. Run `aws configure` and paste the key, the secret, region `us-east-1` and output `json`.
-4. Check: `aws sts get-caller-identity` prints your account ID and user.
+2. In IAM, create a separate user for the CLI, for example `local-dev-user`, with no console access. Give it only the policy below, so a leaked key can push images and update the wildfire functions but can't delete anything or run up a bill. Do everything else (creating roles, functions, schedules) in the console as your admin user.
+3. On that user: Security credentials → Create access key → "Command Line Interface".
+4. Run `aws configure` and paste the key, the secret, region `us-west-2` and output `json`.
+5. Check: `aws sts get-caller-identity` prints your account ID and `local-dev-user`.
+
+The CLI user's policy (IAM → Users → `local-dev-user` → Add permissions → Create inline policy → JSON). Replace `<account>` (12 digits) and `<bucket>`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EcrLogin",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "EcrPushWildfireImage",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:PutImage",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:DescribeImages",
+        "ecr:DescribeRepositories"
+      ],
+      "Resource": "arn:aws:ecr:us-west-2:<account>:repository/riskresource-wildfire"
+    },
+    {
+      "Sid": "UpdateWildfireLambdas",
+      "Effect": "Allow",
+      "Action": ["lambda:UpdateFunctionCode", "lambda:GetFunction"],
+      "Resource": "arn:aws:lambda:us-west-2:<account>:function:wildfire-*"
+    },
+    {
+      "Sid": "SetLogRetention",
+      "Effect": "Allow",
+      "Action": ["logs:PutRetentionPolicy", "logs:DescribeLogGroups"],
+      "Resource": "arn:aws:logs:us-west-2:<account>:log-group:*"
+    },
+    {
+      "Sid": "UploadPublishedScores",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::<bucket>/wildfire/*"
+    },
+    {
+      "Sid": "ListBucket",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::<bucket>"
+    }
+  ]
+}
+```
+
+| Statement | Used by |
+|---|---|
+| `EcrLogin` | `aws ecr get-login-password` (04 step 5). It can't be limited to one repository, hence `*` |
+| `EcrPushWildfireImage` | `docker push` (04 step 5). The two read actions let pushes skip layers ECR already has |
+| `UpdateWildfireLambdas` | `aws lambda update-function-code` after a new image (04). Only the three `wildfire-*` functions |
+| `SetLogRetention` | `aws logs put-retention-policy` (02, 08) |
+| `UploadPublishedScores`, `ListBucket` | `aws s3 cp ... s3://<bucket>/wildfire/latest.json` (07), and `aws s3 ls` to check it |
+
+`aws sts get-caller-identity` needs no permission.
 
 ## Create the S3 bucket
 
@@ -55,7 +122,7 @@ One bucket holds everything the wildfire pipeline produces.
 
 1. S3 → Create bucket.
 2. **Name:** globally unique, lowercase, for example `riskresource-data-<something>`.
-3. **Region:** us-east-1.
+3. **Region:** us-west-2.
 4. **Block all public access:** leave it **on**. Nothing here should be public; the backend reads it with credentials.
 5. **Bucket versioning:** on. If a bad run overwrites `latest.json`, you can restore the previous version.
 6. **Default encryption:** leave the default (SSE-S3). It's free.
@@ -63,12 +130,10 @@ One bucket holds everything the wildfire pipeline produces.
 The folder layout the pipeline uses (S3 has no real folders; these are key prefixes):
 
 ```
-raw/{week}/power/{cell}.parquet     Weather downloads. Delete after 14 days
-features/{week}/features.csv        Model input. Delete after 30 days
-predictions/{week}/                 Raw model output. Delete after 30 days
+raw/{week}/power_{start}_{end}/{cell}.parquet   Weather downloads. Delete after 14 days
+features/{week}/features.csv        Model input, plus fips.json (the county for each row). Delete after 30 days
 wildfire/latest.json                What the backend reads. Always the newest week
 wildfire/weeks/{week}.json          A copy of every week. Keep 1 year
-models/                             Model artifacts (if using SageMaker). Keep
 ```
 
 Retention rules for these prefixes are set up in [08](08-logs-retention-monitoring-costs.md).
@@ -84,14 +149,6 @@ The alert Lambda needs `DATABASE_URL` (the Supabase connection string, which inc
 | Secrets Manager | $0.40/month per secret | Same as Parameter Store, plus automatic rotation, which Supabase doesn't support anyway |
 
 **Recommendation:** an environment variable for now (only your team has console access). Move to Parameter Store later; it's free and keeps the password out of the Lambda's configuration page.
-
-## An email alert topic
-
-Alarms need somewhere to send messages.
-
-1. SNS → Topics → Create topic, type **Standard**, name `riskresource-alerts`.
-2. Create subscription → protocol **Email** → your address.
-3. Click the confirmation link in the email. Until you do, nothing is delivered.
 
 ## A budget alarm
 

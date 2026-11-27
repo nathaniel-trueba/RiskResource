@@ -35,10 +35,10 @@ Lambda's 15-minute limit is the problem. NASA POWER starts refusing requests (HT
 
 ## Settings that matter either way
 
-- **One run at a time.** Reserved concurrency 1 (Lambda), or a single scheduled task (Fargate). Two overlapping runs double the request rate and trigger 429s.
+- **One run at a time.** The Map's `MaxConcurrency: 1` and no manual run during a scheduled one (Lambda; reserved concurrency can't be set on a new account's limit of 10), or a single scheduled task (Fargate). Two overlapping runs double the request rate and trigger 429s.
 - **The request rate as configuration.** Expose `per_minute` and `workers` through environment variables (today they're command-line flags, and the handler uses the defaults), so you can slow down without a redeploy.
 - **Open-Meteo shares a budget with the API.** The job uses ~2,000-3,000 of Open-Meteo's 10,000 free daily calls, and the API's per-county forecasts use the rest. Run the job early Monday UTC, and keep the 8-second spacing (`FORECAST_INTERVAL_SECONDS`).
-- **A failure alarm.** A CloudWatch alarm on task or state-machine failures, emailed through SNS. A missed week otherwise shows up only as scores drifting down.
+- **A failure alarm (not built; left out of the current setup).** A CloudWatch alarm on task or state-machine failures, emailed through SNS. Without it, a missed week shows up only as a red run in the console or a stale week in `/api/health`.
 - **A freshness alarm.** Separately, alarm if the S3 object is older than 8 days. That catches a schedule that silently stopped.
 - **Fewer, cheaper requests.** Most of the 180 days don't change week to week. Keep the previous week's downloads in S3 and fetch only the days since (plus a few days, because POWER revises recent days). That doesn't reduce the number of requests, but each one is much smaller and faster. Also check whether POWER's regional endpoint could fetch many cells per request.
 

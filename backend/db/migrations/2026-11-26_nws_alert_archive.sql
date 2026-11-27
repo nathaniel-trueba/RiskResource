@@ -9,7 +9,8 @@
 --   1. Creates nws_alert_archive and archive_settings (also in db/schema.sql).
 --   2. Copies the last year of alerts the Lambda already stored in weather_alerts
 --      into the slim format, keeping only alerts that cover a county.
---   3. Removes api_config rows for every API except nws_alerts.
+--   3. Removes api_config rows for every API except nws_alerts, and adds the
+--      nws_alerts row if it's missing.
 --   4. Drops the tables only the old Lambda tasks wrote, which nothing reads:
 --      weather_alerts, earthquakes, gauges, weather_observations, locations.
 --      Step 2 keeps the alert history first. The other tables' data is discarded.
@@ -100,6 +101,19 @@ END $$;
 -- 3. The Lambda now only calls NWS --------------------------------------------------
 
 DELETE FROM public.api_config WHERE name <> 'nws_alerts';
+
+-- The Lambda's NWS request settings. NWS rejects requests without a User-Agent.
+-- Query parameters default to status=actual&message_type=alert,update in the
+-- Lambda; anything in default_params overrides them. Existing rows are left alone.
+INSERT INTO public.api_config (name, base_url, default_params, headers)
+VALUES (
+  'nws_alerts',
+  'https://api.weather.gov/alerts/active',
+  '{}'::jsonb,
+  '{"User-Agent": "UCSD-Risk-Resource-NotForProfit", "Accept": "application/geo+json"}'::jsonb
+)
+ON CONFLICT (name) DO NOTHING;
+
 
 -- 4. Tables nothing writes or reads any more ------------------------------------------
 

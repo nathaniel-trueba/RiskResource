@@ -34,14 +34,11 @@ Start (from the Monday schedule)
   ├─ Step 2: Lambda build_features     Open-Meteo forecast + features
   │                                    → s3://bucket/features/{week}/features.csv
   │
-  ├─ Step 3: Inference                 SageMaker Batch Transform (06), or a Lambda
-  │                                    → s3://bucket/predictions/{week}/
-  │
-  ├─ Step 4: Lambda calibrate_and_publish
+  ├─ Step 3: Lambda calibrate_and_publish   runs the model, calibrates, publishes
   │                                    → s3://bucket/wildfire/latest.json
   │                                    → s3://bucket/wildfire/weeks/{week}.json
   │
-  └─ On any failure: email via SNS
+  └─ On any failure: the run fails (red in the Step Functions console)
 ```
 
 How this beats the rate limit:
@@ -53,30 +50,41 @@ How this beats the rate limit:
 
 ## Why not just chain everything with S3 events?
 
-You could: S3 "file created" triggers a Lambda, which starts SageMaker, whose "job finished" event triggers another Lambda. It works for a simple line of steps, but:
+You could: S3 "file created" triggers a Lambda, whose output file triggers the next Lambda, and so on. It works for a simple line of steps, but:
 
 - **"All 1,895 downloads are done" isn't an event.** S3 fires once per file, so you'd get 1,895 triggers and need your own counter to know when the last one landed.
 - **Retries and failures get scattered** across separate Lambdas and event rules, with no single place to see "this week's run failed at step 2".
 - **The rate limit is hard to enforce** when each event starts its own Lambda.
 
-Step Functions handles the waiting, counting, retrying and failure alerts in one place. EventBridge is still used, just as the trigger that starts it.
+Step Functions handles the waiting, counting, retrying and failure reporting in one place. EventBridge is still used, just as the trigger that starts it.
 
 ## Week and file naming
 
 - Every step receives the run's start time (`$$.Execution.StartTime`, see 05) and works out the week's Monday from it, the same way `current_week_start` does today. Every step therefore agrees on the week without being told.
 - All S3 paths include the week (`2026-11-30`), so weeks never overwrite each other's intermediate files. Only `wildfire/latest.json` is overwritten, which is the point.
 
-## Code that still needs writing
+## The code
 
-The scoring logic, the file format and the backend don't change. What's missing is splitting `predict_week.py` into the pieces above:
+All three Lambda handlers are in **`backend/aws/wildfire_steps.py`**, written and tested offline. They reuse the existing model code (`ml/wildfire/`) rather than copying it, so the local `predict_week` job and the AWS pipeline can't drift apart. In the offline test, the pipeline's published scores matched `predict_week`'s exactly for the same week.
 
-| Piece | What to add | Builds on |
-|---|---|---|
-| `fetch_chunk` handler | Take `{"chunk": 3, "of": 8, "startTime": ...}`, pick that slice of cells, download only those not already in S3, and on a 429 raise `Throttled` instead of waiting | `fetch_power`, `sources.fetch_power_cell` (with `attempts=1`) |
-| S3 download cache | Read and write `raw/{week}/power/{cell}.parquet` instead of the local `data/live/` folder | `fetch_power`'s cache logic |
-| `build_features` handler | Read all cells from S3, fetch the forecast, build features, write a CSV with **no header and columns in the model's feature order** (that's what SageMaker's XGBoost container expects), plus a separate file listing the county codes in the same row order | `fetch_forecast`, `wide_daily`, `WildfireModel.features_for_week` |
-| `calibrate_and_publish` handler | Read the raw predictions, apply `calibrate()`, attach the county codes, build a `WeeklyScores`, and `publish()` it to `latest.json` and `weeks/{week}.json` | `WildfireModel.calibrate`, `WeeklyScores`, `publish` |
-| (If skipping SageMaker) inference in `calibrate_and_publish` | Load `model.json`, `predict()`, then the same as above | `WildfireModel.predict` |
+| Handler | Input (event) | What it does | Returns | Errors it raises on purpose |
+|---|---|---|---|---|
+| `fetch_chunk` | `{"chunk": 3, "of": 8, "startTime": ...}` | Takes its slice of the ~1,895 cells, skips cells already in S3, downloads the rest from NASA POWER (each request tried once, paced to `WILDFIRE_POWER_PER_MINUTE`), and saves each to `raw/{week}/power_{start}_{end}/{cell}.parquet`. Stops itself 90 seconds before Lambda's limit | `{"week", "chunk", "cells", "downloaded", "alreadyThere", "failed"}` | `Throttled` on a 429. `ChunkIncomplete` if it ran out of time, or more than 5% of its cells failed. Either way, what it saved is kept |
+| `build_features` | `{"startTime": ...}` | Reads every downloaded cell from S3, fetches the Open-Meteo forecast (8 seconds between requests), builds the 36 features per county, and writes `features/{week}/features.csv` (no header, model column order) and `features/{week}/fips.json` (the county for each row) | `{"week", "featuresUri", "fipsUri", "counties", "dropped"}` | `ValueError` if no county has weather for the week |
+| `calibrate_and_publish` | `{"week": "2026-11-30"}` | Runs the model on the features (under a second), calibrates, and publishes `wildfire/weeks/{week}.json`, then `wildfire/latest.json` | `{"week", "counties", "medianProbabilityPct", "published", "weeklyCopy"}` | |
+
+The only change outside `aws/`: `fetch_power_cell` in `ml/wildfire/sources.py` takes its retry settings as arguments now (`attempts`, `backoff`). The defaults are unchanged, so the local job behaves as before; the Lambda passes `attempts=1`.
+
+**Why the date range is in the download folder name** (`power_{start}_{end}`): every step works out the week and the download range from the run's start time. A retry hours later still uses the same folder and skips what's there, while a different run day (with one more day of NASA data) uses a fresh folder.
+
+Other files in `backend/aws/` for deploying it:
+
+| File | What it is |
+|---|---|
+| `wildfire.Dockerfile` | The container recipe ([04](04-packaging.md)) |
+| `wildfire.Dockerfile.dockerignore` | Keeps local data, the virtualenv and `.env` out of the image |
+| `requirements-pipeline.txt` | The libraries the image needs (the ML ones without the notebook packages, plus boto3) |
+| `wildfire_state_machine.json` | The Step Functions definition, ready to paste ([05](05-step-functions-and-scheduling.md)) |
 
 ## Simpler alternative: one container, no splitting
 

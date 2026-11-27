@@ -83,7 +83,7 @@ The migration is `backend/db/migrations/2026-11-26_nws_alert_archive.sql`. It ha
 |---|---|---|
 | **EventBridge Scheduler** | Starts the Lambda on a timer | Every **15 minutes** (currently hourly). Many tornado and thunderstorm warnings last under an hour, so hourly runs miss them |
 | **Lambda** (`backend/aws/lambda_function.py`) | Fetches all active NWS alerts, keeps those that cover a county, saves them to `nws_alert_archive`, records the run time, and deletes alerts older than `retention_days` | 256 MB, 60 s timeout, one copy at a time, no VPC |
-| **CloudWatch** | Keeps the Lambda's logs, and alarms if it keeps failing | Logs kept **30 days**. Each run writes one short summary line |
+| **CloudWatch** | Keeps the Lambda's logs (no alarms or emails) | Logs kept **30 days**. Each run writes one short summary line |
 
 **What changed:** the Lambda used to collect five feeds (alerts, earthquakes, river gauges, weather for five cities, FEMA's risk index) that nothing used, and its FEMA task overwrote tables the backend owns. Now it does one thing the backend can't do itself: build a history of alerts, since NWS only shows what's active right now.
 
@@ -98,9 +98,8 @@ The weekly job doesn't fit in one Lambda: its 1,900 downloads take about 30 minu
 | Trigger | EventBridge Scheduler, Mondays 06:00 UTC | |
 | 1. Download weather | Lambda, in 8 chunks, one at a time (this keeps the request rate safe) | Raw weather in S3 |
 | 2. Forecast + features | Lambda | The model's input table in S3 |
-| 3. Run the model | SageMaker Batch Transform, or simply a Lambda (the model takes under a second) | Raw predictions in S3 |
-| 4. Calibrate + publish | Lambda | `wildfire/latest.json` in S3, which the backend reads |
-| On failure | SNS email | |
+| 3. Run the model, calibrate + publish | Lambda (the model takes under a second, so no SageMaker) | `wildfire/latest.json` in S3, which the backend reads |
+| On failure | The run fails, visible in the Step Functions console (no email) | |
 
 A simpler alternative is running the existing job unchanged in one container on **ECS Fargate**, which has no time limit. Full details, settings and costs (under $0.50 a month) are in [aws-step-by-step/](aws-step-by-step/README.md).
 
@@ -123,4 +122,4 @@ Its weights come from `frontend/lib/scoring.ts`, which mirrors the backend's.
 | Supabase migration | Written, not run |
 | Alert archive Lambda | Written and tested offline, not deployed |
 | S3 hand-off between job and backend | Code ready; bucket and credentials not set up |
-| Weekly wildfire pipeline on AWS | Designed; step code not written |
+| Weekly wildfire pipeline on AWS | Step code written (`backend/aws/wildfire_steps.py`) and tested offline; AWS resources not created |
