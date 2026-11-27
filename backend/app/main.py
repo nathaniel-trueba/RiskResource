@@ -19,6 +19,7 @@ from app.db import connect, initialize
 from app.routers import counties, health, home_snapshot, map_values, search, states
 from app.services.home_snapshot import load_home_snapshot
 from app.services.reference import ReferenceData
+from app.services.reference_refresh import ReferenceRefresher
 from app.services.risk import RiskService
 from app.services.search import SearchService
 from app.services.wildfire_model import WildfireModelSource
@@ -82,10 +83,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         app.state.search_service = SearchService(settings, cache, reference, open_meteo)
 
+        def install_reference(new_reference: ReferenceData) -> None:
+            """Hand refreshed reference data to every service that holds it.
+
+            Runs on the event loop, between requests, so no request sees a mix.
+
+            Args:
+                new_reference: The data ReferenceRefresher just rebuilt and reseeded.
+            Called by: ReferenceRefresher.check_once.
+            """
+            app.state.risk_service.replace_reference(new_reference)
+            app.state.search_service.replace_reference(new_reference)
+            app.state.home_snapshot = load_home_snapshot(
+                BACKEND_DIR / settings.home_snapshot_dir, new_reference
+            )
+
+        app.state.reference_refresher = ReferenceRefresher(settings, install_reference, reference)
+        refresher = asyncio.create_task(app.state.reference_refresher.run_forever())
+
         # Fill the cache in the background so the first visitor doesn't wait for it.
         warm_up = asyncio.create_task(app.state.risk_service.get_snapshot())
         yield
         warm_up.cancel()
+        refresher.cancel()
 
 
 def create_app() -> FastAPI:

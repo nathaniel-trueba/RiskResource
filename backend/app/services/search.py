@@ -67,14 +67,27 @@ class SearchService:
         self._cache = cache
         self._reference = reference
         self._open_meteo = open_meteo
-        self._state_codes = {
+        self.replace_reference(reference)
+
+    def replace_reference(self, reference: ReferenceData) -> None:
+        """Use this reference data and rebuild the lookup tables from it.
+
+        Args:
+            reference: Static county and state data.
+        Called by: __init__, and main.lifespan's install_reference after a refresh.
+        """
+        state_codes = {
             alias: code
             for code, state in reference.states.items()
             for alias in (code.lower(), normalize(state.name))
         }
-        self._by_state_and_name = {
+        by_state_and_name = {
             (c.state_code, normalize(c.bare_name)): c for c in reference.counties.values()
         }
+        # Swapped together on the event loop, so no request sees a mix.
+        self._reference, self._state_codes, self._by_state_and_name = (
+            reference, state_codes, by_state_and_name
+        )
 
     async def search(self, query: str, limit: int) -> list[SearchResult]:
         """Resolve free text to counties.
