@@ -149,52 +149,101 @@ export default function AboutDataPage() {
 
         {/* Scoring Architecture Schematic */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80 dark:border-white/10">
-          <div className="mb-6">
+          <div className="mb-8">
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">How the score is built</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
-              The overall threat score consists of three parts: {SCORE_WEIGHTS.historical}%
-              history, {SCORE_WEIGHTS.live}% live conditions and {SCORE_WEIGHTS.wildfireModel}% a wildfire
-              model. History and live conditions are blended inside each hazard&apos;s own score, so every
-              hazard bar is half history and half live. The hazards are then combined, weighted toward the
-              worst one (60% the highest score plus 40% the average of the top three), and the wildfire model
-              is added on top. Because only wildfire gets a model of its own, the overall score leans toward
-              wildfire risk by design.
-            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-[#f7f5ef] dark:bg-[#161411] p-6 rounded-2xl border border-[#ece4d0] dark:border-white/10">
-            <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
-              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60 font-semibold">
-                {SCORE_WEIGHTS.historical}% Historical Baseline
-              </span>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Long-Term Exposure</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
-                A county&apos;s percentile rank, among counties that have had the hazard, by distinct FEMA disaster declarations since 2006. For earthquakes it uses USGS M4.5+ earthquakes within 60 miles instead.
-              </p>
+          <div className="space-y-4">
+            {/* 3-Step Horizontal Flow */}
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-3">
+              {/* Step 1 */}
+              <div className="bg-white dark:bg-[#1c1915] p-5 border border-gray-800 dark:border-white/20 flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#d96b38]">
+                    Step 1 · Each Hazard
+                  </span>
+                  <div className="text-3xl font-bold tracking-tight text-gray-950 dark:text-white mt-2">
+                    50 / 50
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
+                    Historical record + live conditions, scored for each of the 6 hazards
+                  </p>
+                </div>
+              </div>
+
+              {/* Arrow 1 -> 2 */}
+              <div className="flex items-center justify-center py-1 md:py-0 text-[#d96b38]" aria-hidden="true">
+                <svg className="w-6 h-6 rotate-90 md:rotate-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 5l7 7-7 7v-4H4v-6h9V5z" />
+                </svg>
+              </div>
+
+              {/* Step 2 */}
+              <div className="bg-white dark:bg-[#1c1915] p-5 border border-gray-800 dark:border-white/20 flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#d96b38]">
+                    Step 2 · Combine Hazards
+                  </span>
+                  <div className="text-3xl font-bold tracking-tight text-gray-950 dark:text-white mt-2">
+                    60 / 40
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
+                    60% worst hazard + 40% average of the top 3, so hazards that don&apos;t apply can&apos;t dilute real risk
+                  </p>
+                </div>
+              </div>
+
+              {/* Arrow 2 -> 3 */}
+              <div className="flex items-center justify-center py-1 md:py-0 text-[#d96b38]" aria-hidden="true">
+                <svg className="w-6 h-6 rotate-90 md:rotate-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 5l7 7-7 7v-4H4v-6h9V5z" />
+                </svg>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-[#1c1b1a] dark:bg-[#0e0d0c] p-5 border border-gray-900 dark:border-white/20 text-white flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#e2b46d]">
+                    Step 3 · Add Wildfire Model
+                  </span>
+                  <div className="text-3xl font-bold tracking-tight text-[#df7541] mt-2">
+                    80 / 20
+                  </div>
+                  <p className="text-xs text-gray-200 mt-2.5 leading-relaxed">
+                    80% combined hazard score + {SCORE_WEIGHTS.wildfireModel}% this week&apos;s ML wildfire forecast
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
-              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60 font-semibold">
-                {SCORE_WEIGHTS.live}% Live Conditions
-              </span>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Real-Time Telemetry</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
-                Injected from hourly NWS alert polygons, HRRR wind gusts (&gt;40 mph), live river stages vs. flood crest, and USGS seismic events.
-              </p>
+            {/* Net Weight Banner */}
+            <div className="bg-[#df7a47] text-white px-4 py-2.5 text-center text-xs sm:text-sm font-semibold tracking-wide">
+              Net weight in every score:{' '}
+              <span className="font-bold">History {SCORE_WEIGHTS.historical}%</span>
+              <span className="mx-2 opacity-80">·</span>
+              <span className="font-bold">Live conditions {SCORE_WEIGHTS.live}%</span>
+              <span className="mx-2 opacity-80">·</span>
+              <span className="font-bold">ML wildfire {SCORE_WEIGHTS.wildfireModel}%</span>
             </div>
 
-            <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
-              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60 font-semibold">
-                {SCORE_WEIGHTS.wildfireModel}% Wildfire Model
-              </span>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Weekly Ignition Forecast</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
-                A machine-learning model trained on large wildfires since 2010 estimates the chance one
-                starts in the county this week, from recent heat, dryness and rain, the week&apos;s forecast
-                and local fire history. That chance is scored on a log scale: 0.01% scores 0, 0.1% scores
-                33, 1% scores 67 and 10% or more scores 100. When the model has no forecast for an area, the
-                score uses history and live conditions alone.
-              </p>
+            {/* 4 Tier Legend Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-[#f3e3c3] text-[#1c1915] py-3 px-4 text-center">
+                <div className="text-xs font-bold">Low</div>
+                <div className="text-xs font-semibold mt-0.5">0–29</div>
+              </div>
+              <div className="bg-[#ebc580] text-[#1c1915] py-3 px-4 text-center">
+                <div className="text-xs font-bold">Moderate</div>
+                <div className="text-xs font-semibold mt-0.5">30–49</div>
+              </div>
+              <div className="bg-[#df7a47] text-white py-3 px-4 text-center">
+                <div className="text-xs font-bold">Elevated</div>
+                <div className="text-xs font-semibold mt-0.5">50–74</div>
+              </div>
+              <div className="bg-[#8b1c12] text-white py-3 px-4 text-center">
+                <div className="text-xs font-bold">Critical</div>
+                <div className="text-xs font-semibold mt-0.5">75–100</div>
+              </div>
             </div>
           </div>
         </section>
