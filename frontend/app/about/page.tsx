@@ -362,9 +362,6 @@ export default function AboutDataPage() {
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-8">
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">Data Sources</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
-              The public datasets and agency feeds behind our scores, maps, and loss estimates.
-            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -403,11 +400,11 @@ export default function AboutDataPage() {
         {/* Data Dictionary Table */}
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10 mb-12">
           <div className="mb-6">
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live Signals And How They Score</h2>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">How Live Warnings Are Scored</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
               Each hazard gets a threat score from 0 to 100. Live sources make up half of it.
               If there are no live warnings, the live score is 0.
-              <br />Here is how we score live signals of varying severity:
+              Here is how we score live signals of varying severity:
             </p>
           </div>
 
