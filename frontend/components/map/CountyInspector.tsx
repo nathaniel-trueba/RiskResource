@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { CountyRecord } from '@/lib/types';
+import { TIER_STYLES } from '@/lib/riskColors';
 import WildfireModelSection from '@/components/map/WildfireModelSection';
 
 interface Props {
@@ -17,19 +18,6 @@ export default function CountyInspector({ county, onBackToState }: Props) {
   useEffect(() => {
     setAlertsExpanded(false);
   }, [county.fips, county.name]);
-
-  const getBadgeColor = (tier: string) => {
-    switch (tier) {
-      case 'Critical':
-        return 'bg-[#7a221b] text-white';
-      case 'Elevated':
-        return 'bg-[#ca6834] text-white';
-      case 'Moderate':
-        return 'bg-[#e5ab58] text-gray-900';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
 
   // Use structured alerts array if available; fallback to activeAlert string
   const alertsList: string[] =
@@ -69,7 +57,8 @@ export default function CountyInspector({ county, onBackToState }: Props) {
               <span className="text-xs font-normal text-gray-400">/100</span>
             </span>
             <span
-              className={`inline-flex items-center justify-center text-center whitespace-nowrap text-[10px] font-semibold leading-none px-2.5 py-1 rounded-full mt-1.5 ${getBadgeColor(county.tier)}`}
+              className={`inline-flex items-center justify-center text-center whitespace-nowrap text-[10px] font-semibold leading-none px-2.5 py-1 rounded-full mt-1.5`}
+              style={{ backgroundColor: TIER_STYLES[county.tier].color, color: TIER_STYLES[county.tier].text }}
             >
               {county.tier}
             </span>
@@ -143,8 +132,7 @@ export default function CountyInspector({ county, onBackToState }: Props) {
                     className="h-full rounded-full transition-all duration-300"
                     style={{
                       width: `${h.score}%`,
-                      backgroundColor:
-                        h.score >= 75 ? '#7a221b' : h.score >= 50 ? '#ca6834' : '#e5ab58',
+                      backgroundColor: TIER_STYLES[h.tier].color,
                     }}
                   />
                 </div>

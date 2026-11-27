@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { StateRecord } from '@/lib/types';
+import { TIER_STYLES } from '@/lib/riskColors';
 import WildfireModelSection from '@/components/map/WildfireModelSection';
 
 interface Props {
@@ -44,7 +45,9 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
               {stateData.compositeScore}
               <span className="text-xs font-normal text-gray-400">/100</span>
             </span>
-            <span className="inline-flex items-center justify-center text-center whitespace-nowrap text-[10px] font-semibold leading-none px-2.5 py-1 rounded-full bg-[#7a221b] text-white mt-1.5">
+            <span className="inline-flex items-center justify-center text-center whitespace-nowrap text-[10px] font-semibold leading-none px-2.5 py-1 rounded-full mt-1.5"
+              style={{ backgroundColor: TIER_STYLES[stateData.tier].color, color: TIER_STYLES[stateData.tier].text }}
+            >
               {stateData.tier} Risk
             </span>
           </div>
@@ -62,7 +65,11 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
           </div>
           <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
             <span className="text-[10px] text-gray-500 block">Threat Index</span>
-            <span className="text-base font-bold text-[#7a221b] font-mono mt-0.5 block">
+            <span className="text-base font-bold text-gray-900 font-mono mt-0.5 flex items-center gap-1.5">
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: TIER_STYLES[stateData.tier].color }}
+              />
               {stateData.tier}
             </span>
           </div>
@@ -138,8 +145,7 @@ export default function StateInspector({ stateData, onDrillDown }: Props) {
                     className="h-full rounded-full transition-all"
                     style={{
                       width: `${h.score}%`,
-                      backgroundColor:
-                        h.score >= 75 ? '#7a221b' : h.score >= 50 ? '#ca6834' : '#e5ab58',
+                      backgroundColor: TIER_STYLES[h.tier].color,
                     }}
                   />
                 </div>

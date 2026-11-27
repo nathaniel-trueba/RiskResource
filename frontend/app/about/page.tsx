@@ -7,6 +7,7 @@ import Footer from '@/components/common/Footer';
 import ScoreExplainer from '@/components/about/ScoreExplainer';
 // import NriExplainer from '@/components/about/NriExplainer';
 import { SCORE_WEIGHTS } from '@/lib/scoring';
+import { TIER_STYLES, TIERS } from '@/lib/riskColors';
 
 interface DataSource {
   name: string;
@@ -284,24 +285,18 @@ export default function AboutDataPage() {
               <span className="font-bold">ML wildfire {SCORE_WEIGHTS.wildfireModel}%</span>
             </div>
 
-            {/* 4 Tier Legend Strip */}
+            {/* 4 Tier Legend Strip, same tiers and colours as the map (lib/riskColors.ts) */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-[#f3e3c3] text-[#1c1915] py-3 px-4 text-center">
-                <div className="text-xs font-bold">Low</div>
-                <div className="text-xs font-semibold mt-0.5">0–29</div>
-              </div>
-              <div className="bg-[#ebc580] text-[#1c1915] py-3 px-4 text-center">
-                <div className="text-xs font-bold">Moderate</div>
-                <div className="text-xs font-semibold mt-0.5">30–49</div>
-              </div>
-              <div className="bg-[#df7a47] text-white py-3 px-4 text-center">
-                <div className="text-xs font-bold">Elevated</div>
-                <div className="text-xs font-semibold mt-0.5">50–74</div>
-              </div>
-              <div className="bg-[#8b1c12] text-white py-3 px-4 text-center">
-                <div className="text-xs font-bold">Critical</div>
-                <div className="text-xs font-semibold mt-0.5">75–100</div>
-              </div>
+              {TIERS.map((tier) => (
+                <div
+                  key={tier}
+                  className="py-3 px-4 text-center"
+                  style={{ backgroundColor: TIER_STYLES[tier].color, color: TIER_STYLES[tier].text }}
+                >
+                  <div className="text-xs font-bold">{tier}</div>
+                  <div className="text-xs font-semibold mt-0.5">{TIER_STYLES[tier].range}</div>
+                </div>
+              ))}
             </div>
           </div>
         </section>

@@ -36,8 +36,9 @@ HAZARDS_WEIGHT = OVERALL_HISTORICAL_WEIGHT + OVERALL_LIVE_WEIGHT
 MODEL_PROBABILITY_FLOOR = 1e-4
 MODEL_PROBABILITY_CEILING = 1e-1
 
-# Lowest score for each tier, highest first. These match the frontend's hazard
-# bar colours, which change at 75 and 50.
+# Lowest score for each tier, highest first. Mirrored by TIER_FLOORS in
+# frontend/lib/riskColors.ts, which colours badges, bars and map bands by tier.
+# If you change one side, change the other.
 TIER_FLOORS: list[tuple[int, Tier]] = [
     (75, "Critical"),
     (50, "Elevated"),

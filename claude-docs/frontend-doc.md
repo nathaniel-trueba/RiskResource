@@ -161,11 +161,11 @@ All in [`lib/riskColors.ts`](../frontend/lib/riskColors.ts):
 
 | Measure | Bands |
 |---|---|
-| Risk score | Fixed: `0–9`, `10–19`, `20–29`, `30–39`, `40+` (`SCORE_BANDS`) |
+| Risk score | Fixed, nested inside the tiers: Low `0–14`, `15–29`; Moderate `30–39`, `40–49`; Elevated `50–74`; Critical `75–100` (`SCORE_BANDS`) |
 | Dollar and percent measures | Quintiles of the values currently shown (`quantileBands`), labelled with real amounts, e.g. `$447 – $737` |
 | No value | Grey, "No data" |
 
-**The score bands aren't the tiers.** Tiers break at 30, 50 and 75, but real scores mostly fall between 0 and 50, because 40% of each score is live and is 0 when nothing is happening. Tier-based colours made almost the whole map one or two colours. The side panels and tooltips still show the backend's tier names.
+**Tiers come from the backend.** `TIER_FLOORS` in `riskColors.ts` mirrors `TIER_FLOORS` in `backend/app/domain/scoring.py` (30, 50, 75). Badges, hazard bars, the wildfire model bar, the /about tier strip and the score explainer all colour by tier with `TIER_STYLES`, using the API's `tier` where there is one. Map bands split Low and Moderate into two shades each, because real scores mostly fall between 0 and 50 (40% of each score is live and is 0 when nothing is happening), but every tier boundary is a band boundary, so a map colour never contradicts the tier in its tooltip.
 
 Quintile bands skip repeated cut points, so a measure where most areas are $0 (for example, hurricane loss) can show fewer than five bands. The home showcase uses `SCORE_BANDS` too.
 

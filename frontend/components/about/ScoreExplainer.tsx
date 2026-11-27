@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { Bricolage_Grotesque, Public_Sans, IBM_Plex_Mono } from 'next/font/google';
 import { SCORE_WEIGHTS } from '@/lib/scoring';
+import { TIER_STYLES, tierFor } from '@/lib/riskColors';
 
 // Interactive "how a score is built" explainer, styled to match the Risk Resource prototype.
 // Simplified to a single hazard: overall = 40% history + 40% live + 20% wildfire model
@@ -16,19 +17,14 @@ const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'] });
 
 const RING_LENGTH = 263.9; // circumference of the r=42 circle
 
-// The site's tiers, from TIER_FLOORS in backend/app/domain/scoring.py.
+// The site's tiers and tier colours, shared with the map (lib/riskColors.ts).
 function rating(score: number): { label: string; color: string; bg: string } {
-  if (score >= 75) return { label: 'Critical', color: '#A51D16', bg: '#FFE3E0' };
-  if (score >= 50) return { label: 'Elevated', color: '#B23A12', bg: '#FFE9DC' };
-  if (score >= 30) return { label: 'Moderate', color: '#8A5A00', bg: '#FFF2D1' };
-  return { label: 'Low', color: '#1E6B45', bg: '#E2F3EA' };
+  const tier = tierFor(score);
+  return { label: tier, color: TIER_STYLES[tier].text, bg: TIER_STYLES[tier].color };
 }
 
 function ringColor(score: number): string {
-  if (score >= 75) return '#B3261E';
-  if (score >= 50) return '#E8622C';
-  if (score >= 30) return '#F0812F';
-  return '#3BA776';
+  return TIER_STYLES[tierFor(score)].color;
 }
 
 interface SliderProps {
@@ -166,7 +162,7 @@ export default function ScoreExplainer() {
                   fill="none"
                   strokeWidth="9"
                   strokeLinecap="round"
-                  stroke={ringColor(score)}
+                  stroke={ringColor(rounded)}
                   strokeDasharray={RING_LENGTH}
                   strokeDashoffset={RING_LENGTH * (1 - score / 100)}
                   style={{ transition: 'stroke-dashoffset 0.6s cubic-bezier(.2,.8,.2,1), stroke 0.4s ease' }}

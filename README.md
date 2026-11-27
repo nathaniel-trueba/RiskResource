@@ -4,150 +4,152 @@ Natural disaster information is spread across many different agency websites and
 
 ## What It Does
 
-Risk Resource is planned as a website where a user enters a US address and sees:
+Risk Resource is a website that scores every US state and county for six natural hazards: **wildfire, earthquake, flood, severe storm, hurricane and tornado**. It combines decades of disaster history with what's happening right now, so you can see both what usually threatens a place and what threatens it this week.
 
-- A risk score covering wildfire, flood, earthquake, and severe weather (whatever pertains to the location)
-- A score for each hazard, with the factors driving it
-- A map of the live data behind the score
-- A plain-language explanation of the score
-- Safety resources and recommended prevention for top hazards
+**Home page (`/`)**
+- Search for a county, city or ZIP code to jump straight to its risk details.
+- An animated US map that cycles through each hazard, state by state.
+- A sample score card with a county picker, showing how a county's hazards stack up.
 
-The home page will display a map of current natural disasters across the US.
+**Risk map (`/map`)**
+- An interactive map you can switch between **states** and **counties**.
+- Color the map by the **overall risk score**, a single hazard's score, **expected annual loss** (total or per person), **social vulnerability** or **community resilience**.
+- Click any state or county to open a side panel with:
+  - The overall risk score (0 to 100) and its tier: Low, Moderate, Elevated or Critical
+  - A score for each hazard, with the reasons behind it (for example "Red Flag Warning active" or "M4.9 earthquake 9 km N of ...")
+  - Active NWS weather alerts for that area
+  - For counties: the next 24 hours of wind and fire weather, and nearby river gauge flood levels
+  - This week's wildfire model estimate: the chance a large wildfire starts in the county
+  - FEMA's estimate of the dollars lost to each hazard in an average year
+
+**About page (`/about`)**
+- A plain-language explanation of how the score is built, what each data source contributes and how FEMA's expected loss figures work.
 
 ## Approach
 
-Each hazard's sub-score will be built from two parts:
+Every score is on a 0 to 100 scale. The **overall risk score** is built from three parts:
 
-| Part | Based on | Examples |
-|------|----------|----------|
-| Baseline | Static, long-term data | FEMA National Risk Index, terrain, distance to faults and flood zones |
-| Live | Real-time public feeds | Nearby active fires, river levels vs. flood stage, recent earthquakes, active weather alerts |
+| Part | Weight | What it measures | Where it comes from | How often it updates |
+|------|--------|------------------|---------------------|----------------------|
+| **Historical baseline** | 40% | How often each hazard has hit the area since 2006 | FEMA disaster declarations, USGS earthquake history | Rebuilt manually (`init_db --refresh`) |
+| **Live signal** | 40% | What's happening right now | NWS alerts, recent USGS earthquakes, Open-Meteo forecast, NOAA river gauges | Every few minutes, on demand |
+| **Wildfire model** | 20% | The chance a large wildfire starts in the county this week | XGBoost model run on NASA POWER and Open-Meteo weather | Weekly, on AWS |
 
-The overall threat score is 40% historical baseline, 40% live signal and 20% a wildfire ignition model (see [`backend/README.md`](backend/README.md)), so it leans toward wildfire risk by design. Keeping the parts separate is intended to make each score explainable.
+How the parts fit together:
 
-The project will start with a rule-based score. The team will then train a machine learning model on historical data to estimate baseline risk, and will only use it if it performs better than the rules on held-out regions.
+1. **Each hazard gets its own score.** Its historical baseline (a percentile against every other county) and its strongest live signal are blended 50/50. For example, a Flash Flood Warning, a river gauge at "major" flood stage, or a magnitude 5.5+ quake within 20 miles each push the live part up.
+2. **The hazards are combined, weighted toward the worst.** A plain average would let hazards that don't apply (hurricanes in Nevada) hide the one that does, so the combined score is 60% the highest hazard and 40% the average of the top three.
+3. **The wildfire model is added last**, as 20% of the overall score. This gives the overall score a deliberate wildfire lean. If the weekly model results are missing or out of date, the overall score uses the hazards alone rather than counting the model as zero.
+
+**The wildfire model** is a machine learning model (XGBoost) trained on large wildfires from 2010 to 2020 and tested on 2021 to 2024, so it's always judged on years it never saw. It looks at recent heat, dryness, humidity, wind, rainfall, soil moisture and each county's fire history. On the test years it beat a history-only baseline, and the 5% of county-weeks it rated riskiest contained 74% of the fires that actually started. Details are in [`backend/ml/wildfire/README.md`](backend/ml/wildfire/README.md).
+
+**Expected annual loss is shown separately from the score.** It's FEMA's estimate, in dollars per year, of the building, agriculture and human losses from each hazard. It doesn't change with the weather and isn't part of the risk score, so the site labels it as a FEMA estimate.
+
+Each part is kept separate so every score can be explained: the side panel shows which alerts, forecasts or historical counts produced it.
 
 ## Data
 
-The team will build its own dataset by pulling from free public sources, including:
+Everything comes from free, public sources. None of them need an API key; every request identifies itself with the User-Agent `UCSD-Risk-Resource-NotForProfit`.
 
-| Hazard / Category | Sources |
-|-------------------|---------|
-| Location & Boundaries | Open-Meteo Geocoding API, Plotly US Counties GeoJSON, US Census Population Estimates |
-| Severe Weather & Hazards | National Weather Service (NWS) Active Alerts API |
-| Weather Conditions & Wildfire | Open-Meteo Forecast API |
-| Flood | NOAA National Water Prediction Service (NWPS) Gauges API, NWS Active Alerts |
-| Earthquake | USGS Earthquake Catalog API |
-| Historical Baseline | OpenFEMA Disaster Declarations Summaries API, USGS Earthquake Catalog |
-| Expected Annual Loss | FEMA National Risk Index (NRI), December 2025 release |
+### Live data (fetched while the site is running)
 
-The full list, with exactly how each source is called, is in [claude-docs/apis.md](claude-docs/apis.md) and [claude-docs/apis-usage.md](claude-docs/apis-usage.md).
+| Source | What we collect | Used for |
+|--------|-----------------|----------|
+| [NWS Active Alerts API](https://www.weather.gov/documentation/services-web-api) | Every active US weather alert: event type (e.g. "Tornado Warning"), severity, headline, and the counties it covers | Live signal for every hazard except earthquake, and the alert list in each side panel. Refreshed every 5 minutes |
+| [USGS Earthquake Catalog API](https://earthquake.usgs.gov/fdsnws/event/1/) | Earthquakes of magnitude 3.0+ in the past 7 days: location, magnitude and place name | Live earthquake signal, scored by magnitude and distance. Refreshed every 5 minutes |
+| [Open-Meteo Forecast API](https://open-meteo.com/en/docs) | The next 24 hours at a county's center: wind gusts, humidity and precipitation | Severe storm (strong gusts) and wildfire (low humidity plus high wind) signals, when a county is opened |
+| [NOAA NWPS Gauges API](https://api.water.noaa.gov/nwps/v1/docs/) | River gauges inside a county: name and observed and forecast flood category (action, minor, moderate, major) | Live flood signal, when a county is opened |
+| [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api) | US place names with their state and county | Search by city or ZIP code |
+
+### Reference data (built ahead of time and stored in the database)
+
+| Source | What we collect | Used for |
+|--------|-----------------|----------|
+| [OpenFEMA Disaster Declarations Summaries API](https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2) | Every disaster declaration since 2006: incident type, state, county and disaster number | Historical baseline for each hazard |
+| [USGS Earthquake Catalog API](https://earthquake.usgs.gov/fdsnws/event/1/) (history) | Locations of every magnitude 4.5+ earthquake in the US since 2006 | Historical earthquake baseline |
+| [FEMA National Risk Index (NRI)](https://hazards.fema.gov/nri/), via FEMA's ArcGIS service | Per county: expected annual loss for 11 hazards, population, social vulnerability and community resilience ratings (December 2025 release) | Expected annual loss, and the vulnerability and resilience map layers |
+| [US Census population estimates](https://www2.census.gov/programs-surveys/popest/datasets/) | County population (2021, with 2019 as a fallback) | Loss per person, state averages and search ranking |
+| [Plotly US counties GeoJSON](https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json) | County names, FIPS codes and boundaries | The county list, county locations and the map's shapes |
+
+### Wildfire model data (fetched weekly, outside the website)
+
+| Source | What we collect | Used for |
+|--------|-----------------|----------|
+| [NASA POWER Daily API](https://power.larc.nasa.gov/docs/services/api/) | 180 days of daily weather for about 1,900 grid cells covering the US: max temperature, dew point, humidity, max wind, precipitation and soil wetness | The model's weather inputs, and its training data |
+| [Open-Meteo Forecast API](https://open-meteo.com/en/docs) | Daily forecast for the same cells | Fills in the days NASA POWER hasn't published yet |
+| [MTBS fire occurrence data](https://www.mtbs.gov/) (training only) | Large wildfires since 1984: ignition date and location | The model's training labels and each county's fire history |
+| [Open-Meteo Elevation API](https://open-meteo.com/en/docs/elevation-api) (training only) | Elevation at each county's center | A model input |
+
+Exactly how each source is called, which fields are read, and each one's rate limits are in [claude-docs/apis-usage.md](claude-docs/apis-usage.md).
 
 ## Tech Stack
 
 | Area | Tools |
 |------|-------|
-| Backend | Python, FastAPI, psycopg |
-| Database | Postgres hosted on Supabase |
-| Data sources | FEMA National Risk Index (ArcGIS), NWS alerts, USGS earthquakes, NOAA NWPS river gauges, Open-Meteo |
-| Cloud | AWS Lambda, EventBridge, CloudWatch Logs |
 | Frontend | Next.js, React, TypeScript, Tailwind CSS, Leaflet |
+| Backend API | Python, FastAPI, Pydantic, httpx, psycopg |
+| Database | PostgreSQL, hosted on Supabase |
+| Machine learning | XGBoost, scikit-learn (calibration), pandas, Shapely, Jupyter, matplotlib |
+| Cloud (AWS) | See below |
+
+### AWS
+
+AWS runs the two jobs that happen on a schedule, outside the API:
+
+| Service | What it does |
+|---------|--------------|
+| **AWS Lambda** | Runs the NWS alert archiver and the three steps of the weekly wildfire pipeline |
+| **Amazon EventBridge** | Triggers the alert archiver every 15 minutes, and starts the wildfire pipeline every Monday at 06:00 UTC |
+| **AWS Step Functions** | Runs the wildfire pipeline in order: download weather in 8 chunks, build the model's features, then score and publish. It's split up because the whole job takes about 30 minutes, longer than Lambda's 15-minute limit, and it retries chunks when NASA POWER rate-limits us |
+| **Amazon S3** | Stores the pipeline's weather downloads and features, and the published weekly scores (`wildfire/latest.json`) that the API reads |
+| **Amazon ECR** | Holds the container image the wildfire Lambdas run from (model, artifacts and code) |
+| **Amazon CloudWatch Logs** | Keeps each function's logs |
+
+- **NWS alert archiver** ([`backend/aws/lambda_function.py`](backend/aws/lambda_function.py)): NWS only serves alerts that are active *now*, so every 15 minutes this copies them into Supabase. That builds a year of alert history per county and gives the API a recent copy to fall back on if NWS goes down.
+- **Weekly wildfire pipeline** ([`backend/aws/wildfire_steps.py`](backend/aws/wildfire_steps.py), [`wildfire_state_machine.json`](backend/aws/wildfire_state_machine.json)): downloads the weather, runs the wildfire model for every county and publishes the scores to S3. The model itself runs in under a second, so it needs no SageMaker.
+
+### Architecture
+
+<!-- TODO: add the architecture diagram PNG (e.g. docs/architecture.png) and update the path below. -->
+![Risk Resource architecture diagram](docs/architecture.png)
 
 ## Repository Structure
 
 ```text
 RiskResource/
-├── backend/                       FastAPI service (see backend/README.md)
-│   ├── app/
-│   │   ├── clients/               One client per upstream API
-│   │   │   ├── nwps.py            NOAA NWPS river gauge list (large, slow nationwide call)
-│   │   │   ├── nws.py             NWS active weather alerts
-│   │   │   ├── open_meteo.py      Open-Meteo geocoding and current weather
-│   │   │   └── usgs.py            USGS earthquake feed
-│   │   ├── core/
-│   │   │   └── cache.py           In-memory TTL cache
-│   │   ├── domain/                Scoring rules and hazard tables, no I/O
-│   │   │   ├── geo.py             Geography helpers
-│   │   │   ├── hazards.py         Hazard definitions and NRI hazard-code mapping
-│   │   │   └── scoring.py         Risk score calculation
-│   │   ├── routers/               One module per endpoint group
-│   │   │   ├── counties.py        County endpoints
-│   │   │   ├── health.py          Health check endpoint
-│   │   │   ├── map_values.py      Per-place values used to color the map
-│   │   │   ├── search.py          County and state search endpoint
-│   │   │   └── states.py          State endpoints
-│   │   ├── services/
-│   │   │   ├── reference.py       Loads reference data from the database
-│   │   │   ├── risk.py            Builds state, county and map responses
-│   │   │   ├── search.py          Search logic behind the search endpoint
-│   │   │   └── snapshot.py        National scores from nationwide feeds
-│   │   ├── config.py              Settings read from environment variables
-│   │   ├── db.py                  Postgres connection, schema creation, seeding
-│   │   ├── dependencies.py        Shared FastAPI dependencies
-│   │   ├── main.py                FastAPI app setup and router registration
-│   │   └── schemas.py             API response models
-│   ├── aws/
-│   │   └── lambda_function.py     Scheduled collector: fetches NWS, USGS, NOAA, Open-Meteo and FEMA NRI data and upserts it into Postgres
-│   ├── data/
-│   │   └── reference.json         Committed snapshot that seeds the database
-│   ├── db/
-│   │   └── schema.sql             Postgres tables, including api_config and the NRI tables
-│   ├── scripts/
-│   │   ├── build_reference_data.py  Rebuilds data/reference.json from FEMA NRI
-│   │   └── init_db.py             Creates the schema and seeds the database
-│   ├── env.example                Template for required environment variables
-│   ├── README.md
-│   └── requirements.txt
-├── claude-docs/                   Detailed docs for developers and coding agents
-│   ├── apis.md
-│   ├── apis-usage.md
-│   ├── backend-doc.md
-│   ├── frontend-doc.md
-│   └── human-review.md            Decisions and issues that need a human
-├── frontend/                      Next.js site
-│   ├── app/
-│   │   ├── about/page.tsx         /about
-│   │   ├── map/page.tsx           /map
-│   │   ├── globals.css            Global styles
-│   │   ├── layout.tsx             Root layout: page metadata and theme provider
-│   │   └── page.tsx               / (hero, hazard map showcase, features grid)
-│   ├── components/
-│   │   ├── about/
-│   │   │   └── ScoreExplainer.tsx   Explains how the risk score is built
-│   │   ├── common/
-│   │   │   ├── Footer.tsx         Site footer
-│   │   │   ├── Navigation.tsx     Sticky top bar with page links and theme toggle
-│   │   │   └── ThemeProvider.tsx  Light/dark theme context, saved in localStorage
-│   │   ├── home/
-│   │   │   ├── FeaturesGrid.tsx   "What you can do" feature cards
-│   │   │   ├── HazardMapShowcase.tsx  US map that cycles through the five hazards
-│   │   │   ├── HeroScoreCard.tsx  Sample score card with a county picker and hazard bars
-│   │   │   └── HomeSearch.tsx     County and state search box on the home page
-│   │   └── map/
-│   │       ├── CountyInspector.tsx    Side panel for a selected county
-│   │       ├── ExpectedLossSection.tsx  Expected annual loss breakdown
-│   │       ├── MapControls.tsx    Geography, metric and hazard controls
-│   │       ├── MapLegend.tsx      Color legend for the map
-│   │       ├── RiskLeafletMap.tsx Leaflet map of states and counties
-│   │       └── StateInspector.tsx Side panel for a selected state
-│   ├── lib/
-│   │   ├── api.ts                 Every backend call
-│   │   ├── format.ts              Number and currency formatting helpers
-│   │   ├── nri.ts                 FEMA NRI labels and helpers
-│   │   ├── riskColors.ts          Color ramps for risk scores
-│   │   └── types.ts               Mirrors backend/app/schemas.py
-│   ├── eslint.config.mjs
-│   ├── next.config.ts
-│   ├── package-lock.json
-│   ├── package.json
-│   └── tsconfig.json
-├── .gitignore
-└── README.md
+├── backend/                 FastAPI service, data pipeline and wildfire model (see backend/README.md)
+│   ├── app/                 The API
+│   │   ├── clients/         One client per upstream API (NWS, USGS, NWPS, Open-Meteo)
+│   │   ├── core/            In-memory cache for live feeds
+│   │   ├── domain/          Scoring rules and hazard tables, no I/O
+│   │   ├── routers/         HTTP endpoints, one module per endpoint group
+│   │   └── services/        Combines reference data, live signals and scoring into responses
+│   ├── aws/                 AWS Lambda code, container image and Step Functions definition
+│   ├── data/                Committed reference data snapshot that seeds the database
+│   │   └── snapshot/        Fixed scores for the home page's hazard map animation
+│   ├── db/                  Postgres schema
+│   │   └── migrations/      Schema changes for existing databases
+│   ├── ml/
+│   │   └── wildfire/        Wildfire model: dataset building, training and weekly scoring
+│   │       ├── artifacts/   Trained model, calibration and precomputed features
+│   │       └── notebooks/   Data exploration, training results and example predictions
+│   ├── scripts/             Database setup and reference data rebuild
+│   └── weekly_scores/       Shared format and storage for the weekly wildfire scores
+├── claude-docs/             Detailed docs for developers and coding agents
+└── frontend/                Next.js site
+    ├── app/                 Pages: home, /map and /about
+    ├── components/          UI components, grouped by page (about, common, home, map)
+    └── lib/                 API calls, types, formatting, colors and scoring helpers
 ```
 
-Empty `__init__.py` files are left out.
-
 ## Documentation
+
+<!--
+  HUMAN REVIEW NEEDED: decide what to do with this section before merging.
+  - Should claude-docs/ stay, be renamed (e.g. docs/), or be trimmed?
+  - Several of these docs carry snapshot dates (2026-11-18) and may be out of date.
+  - backend/ml/wildfire/README.md (the wildfire model) isn't listed below.
+-->
 
 | Doc | For |
 |---|---|

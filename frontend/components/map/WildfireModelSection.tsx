@@ -4,6 +4,7 @@
 import React from 'react';
 import { describeWildfireModel, SCORE_WEIGHTS } from '@/lib/scoring';
 import { WildfireModelInfo } from '@/lib/types';
+import { TIER_STYLES } from '@/lib/riskColors';
 
 interface Props {
   model?: WildfireModelInfo;
@@ -28,7 +29,7 @@ export default function WildfireModelSection({ model }: Props) {
               className="h-full rounded-full transition-all duration-300"
               style={{
                 width: `${model.score}%`,
-                backgroundColor: model.score >= 75 ? '#7a221b' : model.score >= 50 ? '#ca6834' : '#e5ab58',
+                backgroundColor: TIER_STYLES[model.tier].color,
               }}
             />
           </div>
