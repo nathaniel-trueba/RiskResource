@@ -28,5 +28,5 @@ export function describeWildfireModel(model: WildfireModelInfo): string {
   if (model.probability === undefined) return `${week}`;
   const pct = 100 * model.probability;
   const shown = pct < 0.01 ? '<0.01%' : pct < 1 ? `${pct.toFixed(2)}%` : `${pct.toFixed(1)}%`;
-  return `${shown} chance a large wildfire starts this week · ${week}`;
+  return `${shown} chance a large wildfire starts this week`;
 }
