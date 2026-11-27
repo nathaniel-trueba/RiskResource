@@ -23,4 +23,4 @@ backend/ml/wildfire/data/
 *.tsbuildinfo
 
 # # Aditya Temp Files
-# davanam-temp/
+davanam-temp/
