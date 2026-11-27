@@ -546,14 +546,6 @@ export default function HeroScoreCard() {
         ))}
       </div>
 
-      {/* Wildfire model share of the overall score */}
-      {county?.wildfireModel && (
-        <p className="-mt-3 mb-5 text-xs text-gray-500 dark:text-gray-400">
-          Includes the wildfire model ({county.wildfireModel.score}/100 this week) at{' '}
-          {SCORE_WEIGHTS.wildfireModel}% of the score.
-        </p>
-      )}
-
       {/* Footer */}
       <div className="flex items-center justify-between pt-5 border-t border-[#e5e0d5] dark:border-white/10">
         <Link
