@@ -77,6 +77,7 @@ class StateRecord(ApiModel):
     population: str  # Preformatted, e.g. "39,501,350"
     active_alert_count: int | None = None  # Omitted when the NWS feed is unavailable
     primary_alert: str | None = None  # Omitted when there are no active alerts
+    alerts: list[str] | None = None  # Deduplicated active statewide alerts, primary first
     hazards: list[HazardItem]  # Highest score first
     # Population-weighted over counties. Omitted when the model file is missing or stale.
     wildfire_model: WildfireModelInfo | None = None
@@ -92,11 +93,9 @@ class CountyRecord(ApiModel):
     fips: str  # Five characters with leading zero, e.g. "06065"
     pop: str  # Preformatted, e.g. "2,458,395"
     active_alert: str | None = None  # Omitted when there are no active alerts
+    alerts: list[str] | None = None  # <-- Add this if you want the county dropdown too
     hazards: list[HazardItem]  # Highest score first
-    # Omitted when the model file is missing or stale, or had no weather for the county
     wildfire_model: WildfireModelInfo | None = None
-    # Omitted when NRI has no county data, e.g. Connecticut, which NRI reports by
-    # planning region instead
     expected_loss: CountyExpectedLoss | None = None
 
 
