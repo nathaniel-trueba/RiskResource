@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, Pane, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type { Feature, FeatureCollection, Position } from 'geojson';
 import 'leaflet/dist/leaflet.css';
@@ -256,6 +256,19 @@ export default function RiskLeafletMap({
               });
             }}
           />
+        )}
+
+        {/* State borders drawn over the counties, so it's clear where each state's
+            counties begin and end. Its own pane keeps it above the county layer (which
+            re-mounts on selection) and lets clicks and hovers pass through to the counties. */}
+        {viewMode === 'counties' && statesGeo && (
+          <Pane name="state-borders" style={{ zIndex: 450, pointerEvents: 'none' }}>
+            <GeoJSON
+              data={statesGeo}
+              interactive={false}
+              style={{ fill: false, weight: 2, color: '#1a202c', opacity: 0.9 }}
+            />
+          </Pane>
         )}
       </MapContainer>
     </div>
