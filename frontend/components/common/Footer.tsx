@@ -24,101 +24,126 @@ const DATA_FEEDS = [
   },
 ];
 
+const TEAM_MEMBERS = [
+  { name: 'Aditya Davanam', href: 'https://davadoba.github.io', external: true },
+  { name: 'Lilia Maxwell', href: '/', external: false },
+  { name: 'Kevin Li', href: 'https://www.linkedin.com/in/kevinznli/', external: true },
+  { name: 'Nikhita Kadam', href: '/', external: false },
+];
+
 export default function Footer() {
   return (
-    <footer className="w-full bg-[#11100e] border-t border-white/10 py-12 px-6">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8">
-        {/* Brand Mission */}
-        <div className="md:col-span-4 pr-6">
-          <h4 className="text-base font-bold text-white tracking-tight mb-2">Risk Resource</h4>
-          <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
-            Combines public data from OpenFEMA, NOAA/NWS, USGS, and Open-Meteo into an explainable risk index for homeowners and communities.
+    <footer className="w-full bg-[#11100e] border-t border-white/10 pt-12 pb-8 px-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-10">
+          {/* Brand Mission */}
+          <div className="md:col-span-4 pr-6">
+            <h4 className="text-base font-bold text-white tracking-tight mb-2">Risk Resource</h4>
+            <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
+              Combines public data from OpenFEMA, NOAA/NWS, USGS, and Open-Meteo into an explainable risk index for homeowners and communities.
+            </p>
+          </div>
+
+          {/* Column 1: Navigation */}
+          <div className="md:col-span-2 space-y-3">
+            <h5 className="text-xs font-mono uppercase tracking-wider text-gray-200 font-semibold">
+              Navigation
+            </h5>
+            <ul className="space-y-2 text-xs">
+              <li>
+                <Link href="/" className="text-gray-400 hover:text-white transition-colors">
+                  Home
+                </Link>
+              </li>
+              <li>
+                <Link href="/map" className="text-gray-400 hover:text-white transition-colors">
+                  Risk map
+                </Link>
+              </li>
+              <li>
+                <Link href="/about" className="text-gray-400 hover:text-white transition-colors">
+                  About
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 2: Data Feeds */}
+          <div className="md:col-span-2 space-y-3">
+            <h5 className="text-xs font-mono uppercase tracking-wider text-gray-200 font-semibold">
+              Data feeds
+            </h5>
+            <ul className="space-y-2 text-xs">
+              {DATA_FEEDS.map((feed) => (
+                <li key={feed.name}>
+                  <a
+                    href={feed.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    {feed.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Column 3: Affiliations */}
+          <div className="md:col-span-2 space-y-3">
+            <h5 className="text-xs font-mono uppercase tracking-wider text-gray-200 font-semibold">
+              Affiliations
+            </h5>
+            <ul className="space-y-2 text-xs">
+              <li>
+                <a
+                  href="https://www.ds3atucsd.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  DS3 at UCSD
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 4: Team */}
+          <div className="md:col-span-2 space-y-3">
+            <h5 className="text-xs font-mono uppercase tracking-wider text-gray-200 font-semibold">
+              Team
+            </h5>
+            <ul className="space-y-2 text-xs">
+              {TEAM_MEMBERS.map((member) => (
+                <li key={member.name}>
+                  {member.external ? (
+                    <a
+                      href={member.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      {member.name}
+                    </a>
+                  ) : (
+                    <Link
+                      href={member.href}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      {member.name}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Bottom Disclaimer Bar */}
+        <div className="pt-6 border-t border-white/10 text-xs text-gray-500">
+          <p>
+            Risk Resource is intended for informational purposes only and is not a substitute for official warnings or evacuation orders.
           </p>
-        </div>
-
-        {/* Column 1: Navigation */}
-        <div className="md:col-span-2 space-y-3">
-          <h5 className="text-xs font-mono uppercase tracking-wider text-gray-200 font-semibold">
-            Navigation
-          </h5>
-          <ul className="space-y-2 text-xs">
-            <li>
-              <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-                Home
-              </Link>
-            </li>
-            <li>
-              <Link href="/map" className="text-gray-400 hover:text-white transition-colors">
-                Risk map
-              </Link>
-            </li>
-            <li>
-              <Link href="/about" className="text-gray-400 hover:text-white transition-colors">
-                About the data
-              </Link>
-            </li>
-          </ul>
-        </div>
-
-        {/* Column 2: Data Feeds */}
-        <div className="md:col-span-2 space-y-3">
-          <h5 className="text-xs font-mono uppercase tracking-wider text-gray-200 font-semibold">
-            Data feeds
-          </h5>
-          <ul className="space-y-2 text-xs">
-            {DATA_FEEDS.map((feed) => (
-              <li key={feed.name}>
-                <a
-                  href={feed.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {feed.name}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Column 3: Affiliations */}
-        <div className="md:col-span-2 space-y-3">
-          <h5 className="text-xs font-mono uppercase tracking-wider text-gray-200 font-semibold">
-            Affiliations
-          </h5>
-          <ul className="space-y-2 text-xs">
-            <li>
-              <a
-                href="https://www.ds3atucsd.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                DS3 at UCSD
-              </a>
-            </li>
-          </ul>
-        </div>
-
-        {/* Column 4: Team */}
-        <div className="md:col-span-2 space-y-3">
-          <h5 className="text-xs font-mono uppercase tracking-wider text-gray-200 font-semibold">
-            Team
-          </h5>
-          <ul className="space-y-2 text-xs">
-            {['Aditya Davanam', 'Lilia Maxwell', 'Kevin Li', 'Nikhita Kadam'].map((name) => (
-              <li key={name}>
-                <a
-                  href="#"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  {name}
-                </a>
-              </li>
-            ))}
-          </ul>
         </div>
       </div>
     </footer>

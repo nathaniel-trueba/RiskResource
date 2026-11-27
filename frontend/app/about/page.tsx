@@ -5,15 +5,13 @@ import React from 'react';
 import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
 import ScoreExplainer from '@/components/about/ScoreExplainer';
-import NriExplainer from '@/components/about/NriExplainer';
+// import NriExplainer from '@/components/about/NriExplainer';
 import { NRI_HAZARDS_EXCLUDED, NRI_HAZARDS_INCLUDED } from '@/lib/nri';
 import { SCORE_WEIGHTS } from '@/lib/scoring';
 
 interface DataSource {
   name: string;
   agency: string;
-  type: 'Baseline (Static)' | 'Live Telemetry' | 'Weekly Model';
-  cadence: string;
   resolution: string;
   description: string;
   link: string;
@@ -23,8 +21,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Disaster Declarations Summaries',
     agency: 'OpenFEMA',
-    type: 'Baseline (Static)',
-    cadence: 'Refreshed when we rebuild the baseline',
     resolution: 'County',
     description:
       'Every federal major disaster and fire declaration since 2006, by county and incident type. Ranking counties by distinct declarations per hazard gives the historical part of each hazard score. Emergency declarations and COVID-19 are left out.',
@@ -33,8 +29,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Earthquake Catalog',
     agency: 'USGS',
-    type: 'Live Telemetry',
-    cadence: 'Every 5 minutes',
     resolution: 'Epicenter (latitude and longitude)',
     description:
       "Magnitude 3.0+ earthquakes from the past week score a county's live earthquake signal by magnitude and distance (for example M5.5+ within 20 miles). Magnitude 4.5+ earthquakes within 60 miles since 2006 give its earthquake history, where FEMA declarations are too rare to compare counties.",
@@ -43,8 +37,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Active Weather Alerts',
     agency: 'NOAA / NWS',
-    type: 'Live Telemetry',
-    cadence: 'Every 5 minutes',
     resolution: 'County (from each alert’s county codes)',
     description:
       "Every active warning, watch and advisory in the US, in one nationwide request. Each alert type we track has a fixed live score, such as Red Flag Warning 100, Flood Warning 85 and Wind Advisory 35. Our AWS Lambda also archives county alerts for a rolling year, as a backup when the live feed is unreachable.",
@@ -53,8 +45,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Weather Forecast',
     agency: 'Open-Meteo',
-    type: 'Live Telemetry',
-    cadence: 'When a county is opened, cached 30 minutes',
     resolution: 'County center point',
     description:
       'The next 24 hours of wind gusts and humidity. An hour with humidity at or below 15% and gusts of 25 mph or more counts as fire weather, and gusts of 40 or 58 mph count as damaging wind. Its daily forecast also supplies the current week for the wildfire model.',
@@ -63,8 +53,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'River Gauges',
     agency: 'NOAA / NWPS',
-    type: 'Live Telemetry',
-    cadence: 'When a county is opened, cached 15 minutes',
     resolution: 'Individual river gauges in and near the county',
     description:
       "Whether rivers are observed or forecast to reach flood stage. Major, moderate and minor flooding score a county's live flood signal at 100, 85 and 70, and the action stage just below flooding scores 40.",
@@ -73,8 +61,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'Wildfire Ignition Model',
     agency: 'MTBS / NASA POWER',
-    type: 'Weekly Model',
-    cadence: 'Weekly (every Monday)',
     resolution: 'County',
     description:
       'Our XGBoost model of the weekly chance that a large wildfire (about 1,000+ acres in the West, 500+ in the East) starts in each county. Trained on MTBS fire records and NASA POWER weather from 2010 to 2018, calibrated on 2019 and 2020, and tested on 2021 to 2024. It makes up 20% of the overall score.',
@@ -83,8 +69,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'National Risk Index (NRI)',
     agency: 'FEMA',
-    type: 'Baseline (Static)',
-    cadence: 'Periodic releases (December 2025 in use)',
     resolution: 'County (Connecticut by planning region)',
     description:
       "Modeled expected annual loss in dollars, plus social vulnerability and community resilience ratings. We use its losses for the 11 of its 18 hazards that match ours, for the map's loss measures and the Expected Annual Loss panels. It isn't part of the risk score.",
@@ -93,8 +77,6 @@ const DATA_SOURCES: DataSource[] = [
   {
     name: 'County Population Estimates',
     agency: 'U.S. Census Bureau',
-    type: 'Baseline (Static)',
-    cadence: 'Refreshed when we rebuild the baseline',
     resolution: 'County',
     description:
       "Each county's population, used to weight state scores toward where people live and to order search results. Puerto Rico isn't covered, so its municipios are weighted equally.",
@@ -104,42 +86,101 @@ const DATA_SOURCES: DataSource[] = [
 
 // Mirrors ALERT_RULES in backend/app/domain/hazards.py and the thresholds in
 // backend/app/domain/scoring.py. Change them together.
-const LIVE_SIGNALS = [
+interface SeverityLevel {
+  score: number;
+  condition: string;
+}
+
+interface LiveSignalRow {
+  hazard: string;
+  sources: string[];
+  levels: SeverityLevel[]; // lowest score first
+}
+
+const LIVE_SIGNALS: LiveSignalRow[] = [
   {
     hazard: 'Wildfire',
-    sources: 'NWS fire alerts; Open-Meteo humidity and gusts, next 24 hours',
-    lower: 'Fire Weather Watch 60 · humidity ≤ 15% with gusts ≥ 25 mph in the same hour 80',
-    highest: 'Red Flag Warning or Fire Warning: 100',
+    sources: ['NWS fire alerts', 'Open-Meteo (next 24 h)'],
+    levels: [
+      { score: 60, condition: 'Fire Weather Watch' },
+      { score: 80, condition: 'Humidity ≤ 15% and gusts ≥ 25 mph in the same hour' },
+      { score: 100, condition: 'Red Flag Warning or Fire Warning' },
+    ],
   },
   {
     hazard: 'Severe storm',
-    sources: 'NWS storm, wind and winter alerts; Open-Meteo peak gusts',
-    lower: 'Wind Advisory 35 · gusts ≥ 40 mph 70 · High Wind Warning 75 · Severe Thunderstorm Warning 90',
-    highest: 'Extreme Wind Warning or gusts ≥ 58 mph: 100',
+    sources: ['NWS storm, wind and winter alerts', 'Open-Meteo peak gusts'],
+    levels: [
+      { score: 35, condition: 'Wind Advisory' },
+      { score: 70, condition: 'Gusts ≥ 40 mph' },
+      { score: 75, condition: 'High Wind Warning' },
+      { score: 90, condition: 'Severe Thunderstorm Warning' },
+      { score: 100, condition: 'Extreme Wind Warning or gusts ≥ 58 mph' },
+    ],
   },
   {
     hazard: 'Flood',
-    sources: 'NWS flood alerts; NOAA river gauges in and near the county',
-    lower: 'Flood Advisory 35 · gauge at action stage 40 · minor flooding 70 · Flood Warning or moderate flooding 85',
-    highest: 'Flash Flood Warning or major river flooding: 100',
+    sources: ['NWS flood alerts', 'NOAA river gauges'],
+    levels: [
+      { score: 35, condition: 'Flood Advisory' },
+      { score: 40, condition: 'Gauge at action stage' },
+      { score: 70, condition: 'Minor flooding' },
+      { score: 85, condition: 'Flood Warning or moderate flooding' },
+      { score: 100, condition: 'Flash Flood Warning or major river flooding' },
+    ],
   },
   {
     hazard: 'Hurricane',
-    sources: 'NWS tropical and storm surge alerts',
-    lower: 'Tropical Storm Watch 50 · Tropical Storm Warning 75 · Storm Surge Warning 90',
-    highest: 'Hurricane Warning: 100',
+    sources: ['NWS tropical and storm surge alerts'],
+    levels: [
+      { score: 50, condition: 'Tropical Storm Watch' },
+      { score: 75, condition: 'Tropical Storm Warning' },
+      { score: 90, condition: 'Storm Surge Warning' },
+      { score: 100, condition: 'Hurricane Warning' },
+    ],
   },
   {
     hazard: 'Tornado',
-    sources: 'NWS tornado alerts',
-    lower: 'Tornado Watch 65',
-    highest: 'Tornado Warning: 100',
+    sources: ['NWS tornado alerts'],
+    levels: [
+      { score: 65, condition: 'Tornado Watch' },
+      { score: 100, condition: 'Tornado Warning' },
+    ],
   },
   {
     hazard: 'Earthquake',
-    sources: 'USGS earthquakes from the past 7 days',
-    lower: 'M3.0+ within 30 mi 45 · M4.5+ within 30 mi 75',
-    highest: 'M5.5+ within 20 mi: 100',
+    sources: ['USGS (past 7 days)'],
+    levels: [
+      { score: 45, condition: 'M3.0+ within 30 mi' },
+      { score: 75, condition: 'M4.5+ within 30 mi' },
+      { score: 100, condition: 'M5.5+ within 20 mi' },
+    ],
+  },
+];
+
+// Severity bands for the table's columns. Each band's badge uses a muted color:
+// gray low, pale yellow medium, soft red high.
+const SEVERITY_BANDS = [
+  {
+    label: 'Low',
+    range: '0–49',
+    min: 0,
+    max: 49,
+    badge: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-white/10 dark:text-gray-200 dark:border-white/15',
+  },
+  {
+    label: 'Medium',
+    range: '50–84',
+    min: 50,
+    max: 84,
+    badge: 'bg-yellow-50 text-yellow-800 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-200 dark:border-yellow-900/60',
+  },
+  {
+    label: 'High',
+    range: '85–100',
+    min: 85,
+    max: 100,
+    badge: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/50 dark:text-red-200 dark:border-red-900/60',
   },
 ];
 
@@ -150,76 +191,118 @@ export default function AboutDataPage() {
 
       <main className="w-full flex-grow">
         {/* Header Hero Section */}
-        <section className="max-w-5xl mx-auto px-6 pt-16 pb-12">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-gray-500 dark:text-gray-400 block mb-3">
-            — Methodology & Ingestion Pipelines
-          </span>
+		<section className="max-w-5xl mx-auto px-6 pt-16 pb-12">
           <h1 className="text-4xl sm:text-5xl font-normal tracking-tight text-gray-950 dark:text-white leading-tight">
-            About the data <br />
-            <span className="font-semibold text-gray-600 dark:text-gray-400">
-              From scattered data to one clear score.
-            </span>
+            About the Data
           </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
-            Risk Resource synthesizes natural disaster data from government agencies like FEMA, the National Weather Service and USGS.
-            We organize these large datasets so they serve everyday people wondering, <em>&ldquo;How worried should I be about my home right now?&rdquo;</em> Our
-            threat score combines each county&rsquo;s disaster history since 2006, live warnings and conditions, and a weekly
-            wildfire forecast model. FEMA&rsquo;s estimates of what disasters cost, and how vulnerable and resilient each
-            community is, are shown alongside it.
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
+            Hazard information is scattered across agency sites (NOAA, USGS, FEMA) that were not built
+            for a resident asking &ldquo;how worried should I be about my house, right now?&rdquo; Risk
+            Resource answers that, combining natural disaster data across government agencies reporting
+            disaster history, live warnings, and our own wildfire forecast model, resulting in a single
+            threat score. A user enters an address and gets a composite risk score, a per-hazard breakdown,
+            a map of the live data behind it, a plain-language explanation, and safety resources for the
+            top hazard.
           </p>
         </section>
 
         {/* Scoring Architecture Schematic */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80 dark:border-white/10">
-          <div className="mb-6">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
-              Architecture
-            </span>
+          <div className="mb-8">
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">How the score is built</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
-              The overall 0 to 100 threat score has three explainable parts: {SCORE_WEIGHTS.historical}%
-              history, {SCORE_WEIGHTS.live}% live conditions and {SCORE_WEIGHTS.wildfireModel}% a wildfire
-              model. History and live conditions are blended inside each hazard&apos;s own score, so every
-              hazard bar is half history and half live. The hazards are then combined, weighted toward the
-              worst one (60% the highest score plus 40% the average of the top three), and the wildfire model
-              is added on top. Because only wildfire gets a model of its own, the overall score leans toward
-              wildfire risk by design.
-            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-[#f7f5ef] dark:bg-[#161411] p-6 rounded-2xl border border-[#ece4d0] dark:border-white/10">
-            <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
-              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60 font-semibold">
-                {SCORE_WEIGHTS.historical}% Historical Baseline
-              </span>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Long-Term Exposure</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
-                A county&apos;s percentile rank, among counties that have had the hazard, by distinct FEMA disaster declarations since 2006. For earthquakes it uses USGS M4.5+ earthquakes within 60 miles instead.
-              </p>
+          <div className="space-y-4">
+            {/* 3-Step Horizontal Flow */}
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-3">
+              {/* Step 1 */}
+              <div className="bg-white dark:bg-[#1c1915] p-5 border border-gray-800 dark:border-white/20 flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#d96b38]">
+                    Step 1 · Each Hazard
+                  </span>
+                  <div className="text-3xl font-bold tracking-tight text-gray-950 dark:text-white mt-2">
+                    50 / 50
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
+                    Historical record + live conditions, scored for each of the 6 hazards
+                  </p>
+                </div>
+              </div>
+
+              {/* Arrow 1 -> 2 */}
+              <div className="flex items-center justify-center py-1 md:py-0 text-[#d96b38]" aria-hidden="true">
+                <svg className="w-6 h-6 rotate-90 md:rotate-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 5l7 7-7 7v-4H4v-6h9V5z" />
+                </svg>
+              </div>
+
+              {/* Step 2 */}
+              <div className="bg-white dark:bg-[#1c1915] p-5 border border-gray-800 dark:border-white/20 flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#d96b38]">
+                    Step 2 · Combine Hazards
+                  </span>
+                  <div className="text-3xl font-bold tracking-tight text-gray-950 dark:text-white mt-2">
+                    60 / 40
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
+                    60% worst hazard + 40% average of the top 3, so hazards that don&apos;t apply can&apos;t dilute real risk
+                  </p>
+                </div>
+              </div>
+
+              {/* Arrow 2 -> 3 */}
+              <div className="flex items-center justify-center py-1 md:py-0 text-[#d96b38]" aria-hidden="true">
+                <svg className="w-6 h-6 rotate-90 md:rotate-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 5l7 7-7 7v-4H4v-6h9V5z" />
+                </svg>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-[#1c1b1a] dark:bg-[#0e0d0c] p-5 border border-gray-900 dark:border-white/20 text-white flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#e2b46d]">
+                    Step 3 · Add Wildfire Model
+                  </span>
+                  <div className="text-3xl font-bold tracking-tight text-[#df7541] mt-2">
+                    80 / 20
+                  </div>
+                  <p className="text-xs text-gray-200 mt-2.5 leading-relaxed">
+                    80% combined hazard score + {SCORE_WEIGHTS.wildfireModel}% this week&apos;s ML wildfire forecast
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
-              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60 font-semibold">
-                {SCORE_WEIGHTS.live}% Live Conditions
-              </span>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Real-Time Telemetry</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
-                Injected from hourly NWS alert polygons, HRRR wind gusts (&gt;40 mph), live river stages vs. flood crest, and USGS seismic events.
-              </p>
+            {/* Net Weight Banner */}
+            <div className="bg-[#df7a47] text-white px-4 py-2.5 text-center text-xs sm:text-sm font-semibold tracking-wide">
+              Net weight in every score:{' '}
+              <span className="font-bold">History {SCORE_WEIGHTS.historical}%</span>
+              <span className="mx-2 opacity-80">·</span>
+              <span className="font-bold">Live conditions {SCORE_WEIGHTS.live}%</span>
+              <span className="mx-2 opacity-80">·</span>
+              <span className="font-bold">ML wildfire {SCORE_WEIGHTS.wildfireModel}%</span>
             </div>
 
-            <div className="bg-white dark:bg-[#1c1915] p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-2xs">
-              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60 font-semibold">
-                {SCORE_WEIGHTS.wildfireModel}% Wildfire Model
-              </span>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mt-3">Weekly Ignition Forecast</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
-                A machine-learning model trained on large wildfires since 2010 estimates the chance one
-                starts in the county this week, from recent heat, dryness and rain, the week&apos;s forecast
-                and local fire history. That chance is scored on a log scale: 0.01% scores 0, 0.1% scores
-                33, 1% scores 67 and 10% or more scores 100. When the model has no forecast for an area, the
-                score uses history and live conditions alone.
-              </p>
+            {/* 4 Tier Legend Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-[#f3e3c3] text-[#1c1915] py-3 px-4 text-center">
+                <div className="text-xs font-bold">Low</div>
+                <div className="text-xs font-semibold mt-0.5">0–29</div>
+              </div>
+              <div className="bg-[#ebc580] text-[#1c1915] py-3 px-4 text-center">
+                <div className="text-xs font-bold">Moderate</div>
+                <div className="text-xs font-semibold mt-0.5">30–49</div>
+              </div>
+              <div className="bg-[#df7a47] text-white py-3 px-4 text-center">
+                <div className="text-xs font-bold">Elevated</div>
+                <div className="text-xs font-semibold mt-0.5">50–74</div>
+              </div>
+              <div className="bg-[#8b1c12] text-white py-3 px-4 text-center">
+                <div className="text-xs font-bold">Critical</div>
+                <div className="text-xs font-semibold mt-0.5">75–100</div>
+              </div>
             </div>
           </div>
         </section>
@@ -229,9 +312,6 @@ export default function AboutDataPage() {
         {/* Expected annual loss */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-6">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
-              Losses
-            </span>
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">Expected annual loss</h2>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
               Dollar figures come straight from FEMA&apos;s National Risk Index (December 2025). They
@@ -276,14 +356,11 @@ export default function AboutDataPage() {
           </p>
         </section>
 
-        <NriExplainer />
+        {/* <NriExplainer /> */}
 
         {/* Agency Ingestion Feeds */}
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-8">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
-              Pipelines
-            </span>
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">Data Sources</h2>
           </div>
 
@@ -294,12 +371,9 @@ export default function AboutDataPage() {
                 className="p-6 bg-white dark:bg-[#181613] border border-gray-200 dark:border-white/10 rounded-2xl flex flex-col justify-between shadow-2xs hover:border-gray-400 dark:hover:border-white/25 transition-colors"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="mb-3">
                     <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-200 font-semibold">
                       {src.agency}
-                    </span>
-                    <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400">
-                      {src.type}
                     </span>
                   </div>
                   <h3 className="text-base font-medium text-gray-950 dark:text-white">{src.name}</h3>
@@ -308,8 +382,7 @@ export default function AboutDataPage() {
                   </p>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-gray-100 dark:border-white/10 flex items-center justify-between text-xs font-mono text-gray-500 dark:text-gray-400">
-                  <span>Sync: {src.cadence}</span>
+                <div className="mt-6 pt-4 border-t border-gray-100 dark:border-white/10 flex items-center justify-end text-xs font-mono text-gray-500 dark:text-gray-400">
                   <a
                     href={src.link}
                     target="_blank"
@@ -327,33 +400,66 @@ export default function AboutDataPage() {
         {/* Data Dictionary Table */}
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10 mb-12">
           <div className="mb-6">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1">
-              Dictionary
-            </span>
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live signals and how they score</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
-              Each hazard&apos;s live score (0 to 100) is its strongest current signal, and it&apos;s half of that
-              hazard&apos;s score. With nothing happening, the live score is 0. These are the rules in our backend.
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live Signals And How They Score</h2>
+            <p className="text-s text-gray-600 dark:text-gray-400 mt-1 max-w-2.5xl leading-relaxed">
+              Each hazard gets a threat score from 0 to 100.  Live sources make up half of it.
+              If there are no live warnings, the live score is 0.
+              <br />Here is how we score live signals of varying severity:
             </p>
           </div>
 
           <div className="overflow-x-auto bg-white dark:bg-[#181613] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xs">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#211e1a] font-mono text-gray-500 dark:text-gray-400 text-[11px]">
-                  <th className="p-3.5">Hazard</th>
-                  <th className="p-3.5">Live sources</th>
-                  <th className="p-3.5">Lower live scores</th>
-                  <th className="p-3.5">Highest live score</th>
+                <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#211e1a] text-xs font-semibold text-slate-700 dark:text-gray-300">
+                  <th scope="col" className="px-4 py-3 align-middle whitespace-nowrap">Hazard</th>
+                  <th scope="col" className="px-4 py-3 align-middle whitespace-nowrap">Live Sources</th>
+                  {SEVERITY_BANDS.map((band) => (
+                    <th key={band.label} scope="col" className="px-4 py-3 align-middle whitespace-nowrap">
+                      {band.label}{' '}
+                      <span className="font-normal text-slate-500 dark:text-gray-400">({band.range})</span>
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-white/10 text-gray-700 dark:text-gray-300">
+              <tbody className="divide-y divide-gray-100 dark:divide-white/10 text-slate-900 dark:text-gray-100">
                 {LIVE_SIGNALS.map((row) => (
-                  <tr key={row.hazard}>
-                    <td className="p-3.5 font-bold text-gray-900 dark:text-white">{row.hazard}</td>
-                    <td className="p-3.5">{row.sources}</td>
-                    <td className="p-3.5 font-mono">{row.lower}</td>
-                    <td className="p-3.5 font-mono text-rose-700 dark:text-rose-400 font-semibold">{row.highest}</td>
+                  <tr key={row.hazard} className="align-top">
+                    <th scope="row" className="px-4 py-3.5 font-bold whitespace-nowrap">{row.hazard}</th>
+                    <td className="px-4 py-3.5 text-slate-700 dark:text-gray-300 min-w-[9rem] max-w-[13rem]">
+                      <ul className="space-y-0.5 leading-snug">
+                        {row.sources.map((source) => (
+                          <li key={source}>{source}</li>
+                        ))}
+                      </ul>
+                    </td>
+                    {SEVERITY_BANDS.map((band) => {
+                      const levels = row.levels
+                        .filter((level) => level.score >= band.min && level.score <= band.max)
+                        .sort((a, b) => a.score - b.score);
+                      return (
+                        <td key={band.label} className="px-4 py-3.5 min-w-[11rem]">
+                          {levels.length === 0 ? (
+                            <span className="text-gray-400 dark:text-gray-500" aria-label="None">
+                              —
+                            </span>
+                          ) : (
+                            <ol className="space-y-2">
+                              {levels.map((level) => (
+                                <li key={level.condition} className="flex items-start gap-2">
+                                  <span
+                                    className={`inline-flex w-9 shrink-0 justify-center rounded-full border py-0.5 text-xs font-semibold tabular-nums ${band.badge}`}
+                                  >
+                                    {level.score}
+                                  </span>
+                                  <span className="leading-snug pt-0.5">{level.condition}</span>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>

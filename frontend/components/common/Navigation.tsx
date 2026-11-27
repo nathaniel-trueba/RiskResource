@@ -40,7 +40,7 @@ export default function Navigation() {
             {[
               { href: '/', label: 'Home' },
               { href: '/map', label: 'Risk map' },
-              { href: '/about', label: 'About the data' },
+              { href: '/about', label: 'About' },
             ].map((link) => (
               <Link
                 key={link.href}
