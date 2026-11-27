@@ -7,7 +7,7 @@ const FEATURES = [
     num: '01',
     title: 'Explore the risk map',
     description:
-      'Switch between states and counties and color the map by risk score, loss per person, social vulnerability or community resilience.',
+      'Switch between states and counties to view risk score, loss per person, social vulnerability or community resilience on both narrow and broad scales.',
     linkLabel: 'Open the map →',
     href: '/map',
   },
@@ -15,7 +15,7 @@ const FEATURES = [
     num: '02',
     title: 'See your biggest hazards',
     description:
-      'Every county ranks its six hazards by threat score and explains what drives each one, so you know what to prepare for first.',
+      'Hazards and expected annual damage ranked per-county, so you know what is affecting your community most.',
     linkLabel: 'See an example →',
     href: '/map?fips=06065',
   },
@@ -23,15 +23,15 @@ const FEATURES = [
     num: '03',
     title: 'Live hazard alerts',
     description:
-      'Weather warnings, recent earthquakes, river gauges and forecast winds, layered over long-term risk.',
+      'Active fires, flood gauges and weather warnings to understand what hazards are most imminent.',
     linkLabel: 'Check live conditions →',
     href: '/map',
   },
   {
     num: '04',
-    title: 'Built on public data',
+    title: 'Sources and Data',
     description:
-      'Scores combine FEMA disaster records, live NWS, USGS and NOAA data, and our wildfire model. Loss estimates come from FEMA. Every source is listed.',
+      "Sources data from publicly available government-managed datasets.",
     linkLabel: 'How the data works →',
     href: '/about',
   },
@@ -40,11 +40,8 @@ const FEATURES = [
 export default function FeaturesGrid() {
   return (
     <section className="mt-20 pt-14 border-t border-[#e5e0d5] dark:border-white/10">
-      <span className="text-[11px] font-mono uppercase tracking-widest text-amber-800 dark:text-amber-500 block mb-2">
-        WHAT YOU CAN DO
-      </span>
       <h2 className="text-3xl sm:text-4xl font-black text-gray-950 dark:text-white tracking-tight mb-8">
-        From national patterns to one county.
+        Understand The Hazards Facing Your Community
       </h2>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

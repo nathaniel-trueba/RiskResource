@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { fetchMapValues, MapMetric } from '@/lib/api';
-import { scoreColor, SCORE_BANDS } from '@/lib/riskColors';
+import { scoreColor } from '@/lib/riskColors';
 import { MapValue } from '@/lib/types';
 import { useTheme } from '@/components/common/ThemeProvider';
 import type { Feature, Geometry, Position } from 'geojson';
@@ -24,25 +24,28 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     metric: 'flood',
     color: '#4a72b2',
     description:
-      'Riverine and flash flooding follow the Gulf Coast, Florida and the Mississippi and Ohio river valleys.',
+      'Heavy rainfall, snowmelt, and storm surge concentrate flood risk along the Gulf Coast, Florida, and the Mississippi and Ohio river basins.',
     fallbackStates: {
       Louisiana: '#c45138',
-      Mississippi: '#c45138',
-      Florida: '#e08f52',
+      Florida: '#c45138',
+      Mississippi: '#e08f52',
+      Arkansas: '#e08f52',
+      Missouri: '#e08f52',
       Illinois: '#e08f52',
-      Arkansas: '#eab676',
-      Missouri: '#eab676',
+      Texas: '#eab676',
+      Iowa: '#eab676',
       Kentucky: '#eab676',
       Tennessee: '#eab676',
-      Texas: '#f1d69d',
-      Oklahoma: '#f1d69d',
-      Iowa: '#f1d69d',
-      Indiana: '#f1d69d',
-      Ohio: '#f1d69d',
-      Georgia: '#f1d69d',
+      Indiana: '#eab676',
+      Ohio: '#eab676',
+      'North Carolina': '#eab676',
+      'South Carolina': '#eab676',
       Alabama: '#f1d69d',
-      'North Carolina': '#f1d69d',
-      'South Carolina': '#f1d69d',
+      Georgia: '#f1d69d',
+      Virginia: '#f1d69d',
+      'New Jersey': '#f1d69d',
+      'West Virginia': '#f1d69d',
+      California: '#f1d69d',
     },
   },
   Wildfire: {
@@ -50,20 +53,22 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     metric: 'wildfire',
     color: '#e65100',
     description:
-      'High fuel loads, drought, and seasonal Santa Ana or Diablo wind corridors elevate risk across the West.',
+      'Dry summers, dense forest fuels, and seasonal downslope winds drive severe wildfire exposure across California, the Pacific Northwest, and the Mountain West.',
     fallbackStates: {
       California: '#c45138',
       Oregon: '#e08f52',
       Washington: '#e08f52',
       Idaho: '#e08f52',
-      Nevada: '#eab676',
-      Arizona: '#eab676',
+      Arizona: '#e08f52',
       'New Mexico': '#eab676',
+      Nevada: '#eab676',
       Utah: '#eab676',
-      Colorado: '#f1d69d',
-      Montana: '#f1d69d',
+      Colorado: '#eab676',
+      Montana: '#eab676',
       Wyoming: '#f1d69d',
-      Hawaii: '#e08f52',
+      Texas: '#f1d69d',
+      Oklahoma: '#f1d69d',
+      Hawaii: '#eab676',
     },
   },
   Earthquake: {
@@ -71,7 +76,7 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     metric: 'earthquake',
     color: '#c49a45',
     description:
-      'Fault systems along the Pacific plate boundary, Cascadia Subduction Zone, and New Madrid Seismic Zone carry high risk.',
+      'Tectonic plate boundaries along the West Coast, Alaska, and New Madrid fault zones account for the highest seismic hazard.',
     fallbackStates: {
       California: '#c45138',
       Alaska: '#c45138',
@@ -80,7 +85,11 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
       Nevada: '#eab676',
       Utah: '#eab676',
       Hawaii: '#eab676',
+      Idaho: '#f1d69d',
+      Montana: '#f1d69d',
+      Wyoming: '#f1d69d',
       Missouri: '#f1d69d',
+      Arkansas: '#f1d69d',
       Tennessee: '#f1d69d',
     },
   },
@@ -89,20 +98,22 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     metric: 'hurricane',
     color: '#2a9d8f',
     description:
-      'Coastal counties from Texas to the Carolinas carry most of the risk, with Florida highest.',
+      'Tropical cyclones bring destructive winds, storm surge, and inland flooding from the Texas Gulf Coast across Florida and up the Eastern Seaboard.',
     fallbackStates: {
       Florida: '#c45138',
       Louisiana: '#c45138',
       Texas: '#e08f52',
       'North Carolina': '#e08f52',
-      'South Carolina': '#eab676',
-      Georgia: '#eab676',
-      Alabama: '#eab676',
+      'South Carolina': '#e08f52',
       Mississippi: '#eab676',
-      Virginia: '#f1d69d',
+      Alabama: '#eab676',
+      Georgia: '#eab676',
+      Virginia: '#eab676',
+      Maryland: '#f1d69d',
+      Delaware: '#f1d69d',
       'New Jersey': '#f1d69d',
       'New York': '#f1d69d',
-      Hawaii: '#f1d69d',
+      Massachusetts: '#f1d69d',
     },
   },
   Tornado: {
@@ -110,20 +121,26 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     metric: 'tornado',
     color: '#7b52ab',
     description:
-      'Severe supercells colliding over Tornado Alley and Dixie Alley drive intense tornado frequencies.',
+      'Warm, humid Gulf air clashing with cool, dry air masses fuels frequent severe thunderstorms across the Great Plains, Midwest, and Deep South.',
     fallbackStates: {
       Oklahoma: '#c45138',
       Kansas: '#c45138',
-      Texas: '#e08f52',
+      Texas: '#c45138',
+      Mississippi: '#e08f52',
+      Alabama: '#e08f52',
+      Arkansas: '#e08f52',
+      Missouri: '#e08f52',
+      Iowa: '#e08f52',
       Nebraska: '#e08f52',
-      Iowa: '#eab676',
-      Missouri: '#eab676',
-      Mississippi: '#eab676',
-      Alabama: '#eab676',
-      Arkansas: '#f1d69d',
-      Tennessee: '#f1d69d',
-      Illinois: '#f1d69d',
-      Indiana: '#f1d69d',
+      Illinois: '#eab676',
+      Indiana: '#eab676',
+      Tennessee: '#eab676',
+      Louisiana: '#eab676',
+      Kentucky: '#f1d69d',
+      Georgia: '#f1d69d',
+      'South Dakota': '#f1d69d',
+      Minnesota: '#f1d69d',
+      Ohio: '#f1d69d',
     },
   },
 };
@@ -192,7 +209,6 @@ export default function HazardMapShowcase() {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [scores, setScores] = useState<Partial<Record<HazardType, Record<string, MapValue>>>>({});
-  const [scoresFailed, setScoresFailed] = useState(false);
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -206,7 +222,7 @@ export default function HazardMapShowcase() {
     )
       .then((entries) => setScores(Object.fromEntries(entries)))
       .catch(() => {
-        setScoresFailed(true);
+        // Fallback regional highlights will be used automatically
       });
   }, []);
 
@@ -257,7 +273,6 @@ export default function HazardMapShowcase() {
               {features.map((feature, idx) => {
                 const name = feature.properties?.name || '';
                 const value = scores[activeHazard]?.[String(feature.id)];
-                // Uses live backend score if available, otherwise falls back to regional highlight map
                 const fill = value
                   ? scoreColor(value.value)
                   : current.fallbackStates[name] || defaultBaseColor;
@@ -273,9 +288,7 @@ export default function HazardMapShowcase() {
                     strokeLinejoin="round"
                     className="transition-colors duration-700 ease-in-out cursor-pointer hover:opacity-90"
                   >
-                    <title>
-                      {value ? `${name}: ${value.value}/100 (${value.tier})` : name}
-                    </title>
+                    <title>{name}</title>
                   </path>
                 );
               })}
@@ -289,23 +302,9 @@ export default function HazardMapShowcase() {
             <h3 className="font-display text-4xl font-extrabold text-gray-950 dark:text-white tracking-tight">
               {current.name}
             </h3>
-            <p className="text-base text-gray-600 dark:text-gray-400 mt-3 leading-relaxed min-h-[96px]">
+            <p className="text-base text-gray-600 dark:text-gray-400 mt-3 leading-relaxed min-h-[112px]">
               {current.description}
             </p>
-            {/* Colour key */}
-            <div className="mt-4 flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-gray-600 dark:text-gray-400">
-              <span>{scoresFailed ? 'Regional pattern' : 'State score'}</span>
-              {SCORE_BANDS.map((band) => (
-                <span key={band.label} className="flex items-center gap-1">
-                  <span
-                    className="w-3 h-3 rounded-sm border border-black/10 dark:border-transparent"
-                    style={{ backgroundColor: band.color }}
-                  />
-                  {band.min}
-                  {band.min === SCORE_BANDS[SCORE_BANDS.length - 1].min ? '+' : ''}
-                </span>
-              ))}
-            </div>
           </div>
 
           <div className="flex flex-wrap gap-2.5">

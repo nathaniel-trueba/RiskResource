@@ -6,7 +6,6 @@ import Navigation from '@/components/common/Navigation';
 import Footer from '@/components/common/Footer';
 import ScoreExplainer from '@/components/about/ScoreExplainer';
 // import NriExplainer from '@/components/about/NriExplainer';
-import { NRI_HAZARDS_EXCLUDED, NRI_HAZARDS_INCLUDED } from '@/lib/nri';
 import { SCORE_WEIGHTS } from '@/lib/scoring';
 
 interface DataSource {
@@ -209,7 +208,7 @@ export default function AboutDataPage() {
         {/* Scoring Architecture Schematic */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-8">
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">How the score is built</h2>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">How The Score Is Built</h2>
           </div>
 
           <div className="space-y-4">
@@ -312,48 +311,59 @@ export default function AboutDataPage() {
         {/* Expected annual loss */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-6">
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Expected annual loss</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
-              Dollar figures come straight from FEMA&apos;s National Risk Index (December 2025). They
-              are FEMA&apos;s modeled average yearly loss to buildings and crops, plus deaths and
-              injuries at FEMA&apos;s dollar value. They&apos;re estimates, not money actually lost, and
-              they don&apos;t change with live conditions. A county is <em>high-loss</em> when its loss
-              per person is in the top 20% of all US counties.
-            </p>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Expected Annual Loss</h2>
           </div>
 
-          <div className="overflow-x-auto bg-white dark:bg-[#181613] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xs">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#211e1a] font-mono text-gray-500 dark:text-gray-400 text-[11px]">
-                  <th className="p-3.5">Our hazard</th>
-                  <th className="p-3.5">NRI hazards counted</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-white/10 text-gray-700 dark:text-gray-300">
-                {Object.entries(NRI_HAZARDS_INCLUDED).map(([ours, nri]) => (
-                  <tr key={ours}>
-                    <td className="p-3.5 font-bold text-gray-900 dark:text-white">{ours}</td>
-                    <td className="p-3.5">{nri}</td>
-                  </tr>
-                ))}
-                <tr>
-                  <td className="p-3.5 font-bold text-gray-500 dark:text-gray-400">Not counted</td>
-                  <td className="p-3.5 text-gray-500 dark:text-gray-400">
-                    {NRI_HAZARDS_EXCLUDED.join(', ')}: NRI models these, but they have no
-                    matching hazard here, so every loss figure leaves them out. Nationally, the
-                    counted hazards make up about 86% of NRI&apos;s total expected loss.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Card 1 */}
+            <div className="bg-white dark:bg-[#1c1915] p-5 border border-gray-200 dark:border-white/15 rounded-xl flex flex-col justify-between shadow-2xs">
+              <div>
+                <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#d96b38]">
+                  How FEMA Values Loss
+                </span>
+                <div className="text-lg font-bold tracking-tight text-gray-950 dark:text-white mt-2">
+                  Estimated Yearly Cost
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
+                  FEMA&apos;s National Risk Index estimates the average annual financial impact of
+                  disasters across three areas: damage to buildings, losses to crops, and the dollar
+                  value of injuries and lives lost.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 2 */}
+            <div className="bg-white dark:bg-[#1c1915] p-5 border border-gray-200 dark:border-white/15 rounded-xl flex flex-col justify-between shadow-2xs">
+              <div>
+                <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#d96b38]">
+                  How High-Loss Is Defined
+                </span>
+                <div className="text-lg font-bold tracking-tight text-gray-950 dark:text-white mt-2">
+                  Top 20% Nationwide
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
+                  Counties ranking in the top 20% nationwide for expected loss per person are flagged
+                  as <em className="text-gray-900 dark:text-gray-200">high-loss</em>.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3 */}
+            <div className="bg-white dark:bg-[#1c1915] p-5 border border-gray-200 dark:border-white/15 rounded-xl flex flex-col justify-between shadow-2xs">
+              <div>
+                <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#d96b38]">
+                  What the Dollar Figures Cover
+                </span>
+                <div className="text-lg font-bold tracking-tight text-gray-950 dark:text-white mt-2">
+                  Six Tracked Hazards
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
+                  Both total loss and loss per person combine FEMA&apos;s annual damage estimates
+                  across Wildfire, Earthquake, Flood, Severe Storm, Hurricane, and Tornado.
+                </p>
+              </div>
+            </div>
           </div>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-3 leading-relaxed max-w-2xl">
-            NRI reports Connecticut by its 9 planning regions, which don&apos;t line up with its
-            8 former counties, so Connecticut counties have no loss data; the state total includes
-            every region. Social vulnerability and community resilience ratings cover all of
-            NRI&apos;s hazards.
-          </p>
         </section>
 
         {/* <NriExplainer /> */}
@@ -362,9 +372,6 @@ export default function AboutDataPage() {
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-8">
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">Data Sources</h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
-              The public datasets and agency feeds behind our scores, maps, and loss estimates.
-            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -403,11 +410,11 @@ export default function AboutDataPage() {
         {/* Data Dictionary Table */}
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10 mb-12">
           <div className="mb-6">
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live Signals And How They Score</h2>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">How Live Warnings Are Scored</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
               Each hazard gets a threat score from 0 to 100. Live sources make up half of it.
               If there are no live warnings, the live score is 0.
-              <br />Here is how we score live signals of varying severity:
+              Here is how we score live signals of varying severity:
             </p>
           </div>
 
