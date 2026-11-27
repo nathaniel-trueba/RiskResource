@@ -23,7 +23,7 @@ const DATA_SOURCES: DataSource[] = [
     agency: 'OpenFEMA',
     resolution: 'County',
     description:
-      'Every federal major disaster and fire declaration since 2006, by county and incident type. Ranking counties by distinct declarations per hazard gives the historical part of each hazard score. Emergency declarations and COVID-19 are left out.',
+      'Official records of every federal major disaster and fire declaration across U.S. counties since 2006.',
     link: 'https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2',
   },
   {
@@ -31,7 +31,7 @@ const DATA_SOURCES: DataSource[] = [
     agency: 'USGS',
     resolution: 'Epicenter (latitude and longitude)',
     description:
-      "Magnitude 3.0+ earthquakes from the past week score a county's live earthquake signal by magnitude and distance (for example M5.5+ within 20 miles). Magnitude 4.5+ earthquakes within 60 miles since 2006 give its earthquake history, where FEMA declarations are too rare to compare counties.",
+      'Real-time and historical earthquake reports from the U.S. Geological Survey.',
     link: 'https://earthquake.usgs.gov/fdsnws/event/1/',
   },
   {
@@ -39,7 +39,7 @@ const DATA_SOURCES: DataSource[] = [
     agency: 'NOAA / NWS',
     resolution: 'County (from each alert’s county codes)',
     description:
-      "Every active warning, watch and advisory in the US, in one nationwide request. Each alert type we track has a fixed live score, such as Red Flag Warning 100, Flood Warning 85 and Wind Advisory 35. Our AWS Lambda also archives county alerts for a rolling year, as a backup when the live feed is unreachable.",
+      'Live nationwide warnings, watches, and advisories issued by the National Weather Service.',
     link: 'https://www.weather.gov/documentation/services-web-api',
   },
   {
@@ -47,7 +47,7 @@ const DATA_SOURCES: DataSource[] = [
     agency: 'Open-Meteo',
     resolution: 'County center point',
     description:
-      'The next 24 hours of wind gusts and humidity. An hour with humidity at or below 15% and gusts of 25 mph or more counts as fire weather, and gusts of 40 or 58 mph count as damaging wind. Its daily forecast also supplies the current week for the wildfire model.',
+      'Hourly and daily local weather forecasts providing wind speeds, gusts, temperature, and relative humidity.',
     link: 'https://open-meteo.com/en/docs',
   },
   {
@@ -55,15 +55,15 @@ const DATA_SOURCES: DataSource[] = [
     agency: 'NOAA / NWPS',
     resolution: 'Individual river gauges in and near the county',
     description:
-      "Whether rivers are observed or forecast to reach flood stage. Major, moderate and minor flooding score a county's live flood signal at 100, 85 and 70, and the action stage just below flooding scores 40.",
-    link: 'https://water.noaa.gov/',
+      'Observed and forecasted water levels from river gauges nationwide, tracked against local action and flood stages.',
+    link: 'https://api.water.noaa.gov/nwps/v1/docs/',
   },
   {
-    name: 'Wildfire Ignition Model',
+    name: 'Historical Burn & Weather Data',
     agency: 'MTBS / NASA POWER',
     resolution: 'County',
     description:
-      'Our XGBoost model of the weekly chance that a large wildfire (about 1,000+ acres in the West, 500+ in the East) starts in each county. Trained on MTBS fire records and NASA POWER weather from 2010 to 2018, calibrated on 2019 and 2020, and tested on 2021 to 2024. It makes up 20% of the overall score.',
+      'Satellite-mapped wildfire burn perimeters from Monitoring Trends in Burn Severity paired with daily solar, temperature, and moisture data from NASA.',
     link: 'https://www.mtbs.gov/',
   },
   {
@@ -71,7 +71,7 @@ const DATA_SOURCES: DataSource[] = [
     agency: 'FEMA',
     resolution: 'County (Connecticut by planning region)',
     description:
-      "Modeled expected annual loss in dollars, plus social vulnerability and community resilience ratings. We use its losses for the 11 of its 18 hazards that match ours, for the map's loss measures and the Expected Annual Loss panels. It isn't part of the risk score.",
+      "FEMA's county-level dataset estimating expected annual economic losses from natural hazards alongside social vulnerability and community resilience ratings.",
     link: 'https://hazards.fema.gov/nri/',
   },
   {
@@ -79,7 +79,7 @@ const DATA_SOURCES: DataSource[] = [
     agency: 'U.S. Census Bureau',
     resolution: 'County',
     description:
-      "Each county's population, used to weight state scores toward where people live and to order search results. Puerto Rico isn't covered, so its municipios are weighted equally.",
+      'Official U.S. Census population.',
     link: 'https://www.census.gov/programs-surveys/popest.html',
   },
 ];
@@ -191,7 +191,7 @@ export default function AboutDataPage() {
 
       <main className="w-full flex-grow">
         {/* Header Hero Section */}
-		<section className="max-w-5xl mx-auto px-6 pt-16 pb-12">
+        <section className="max-w-5xl mx-auto px-6 pt-16 pb-12">
           <h1 className="text-4xl sm:text-5xl font-normal tracking-tight text-gray-950 dark:text-white leading-tight">
             About the Data
           </h1>
@@ -362,6 +362,9 @@ export default function AboutDataPage() {
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-8">
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">Data Sources</h2>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
+              The public datasets and agency feeds behind our scores, maps, and loss estimates.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -401,8 +404,8 @@ export default function AboutDataPage() {
         <section className="max-w-5xl mx-auto px-6 py-12 border-t border-gray-200/80 dark:border-white/10 mb-12">
           <div className="mb-6">
             <h2 className="text-xl font-medium text-gray-900 dark:text-white">Live Signals And How They Score</h2>
-            <p className="text-s text-gray-600 dark:text-gray-400 mt-1 max-w-2.5xl leading-relaxed">
-              Each hazard gets a threat score from 0 to 100.  Live sources make up half of it.
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 max-w-2xl leading-relaxed">
+              Each hazard gets a threat score from 0 to 100. Live sources make up half of it.
               If there are no live warnings, the live score is 0.
               <br />Here is how we score live signals of varying severity:
             </p>

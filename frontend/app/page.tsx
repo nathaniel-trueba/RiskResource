@@ -41,11 +41,8 @@ export default function HomePage() {
 
         {/* Section 2: Map showcase */}
         <section className="mb-24">
-          <span className="text-xs font-mono uppercase tracking-[0.2em] text-amber-700 dark:text-[#e29b4d] block mb-3 font-semibold">
-            ONE COUNTRY, FIVE HAZARDS
-          </span>
           <h2 className="font-display text-3xl sm:text-5xl font-extrabold text-gray-950 dark:text-white tracking-[-0.02em]">
-            Risk looks different for every hazard.
+            Risk looks different for across the U.S.
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-3 mb-8">
 
