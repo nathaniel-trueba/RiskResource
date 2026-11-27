@@ -59,6 +59,7 @@ export interface StateRecord {
   population: string;
   activeAlertCount?: number;
   primaryAlert?: string;
+  alerts?: string[];   // Deduplicated active statewide alerts, primary first
   hazards: HazardItem[];
   wildfireModel?: WildfireModelInfo;  // Population-weighted. Omitted when the model file is missing or stale
   expectedLoss?: StateExpectedLoss;   // Omitted when NRI has no data
@@ -73,6 +74,7 @@ export interface CountyRecord {
   fips?: string;
   pop: string;
   activeAlert?: string;
+  alerts?: string[];   // Deduplicated active county alerts, most important first
   hazards: HazardItem[];
   wildfireModel?: WildfireModelInfo;  // Omitted when the model is unavailable for the county
   // Omitted when NRI has no county data, e.g. Connecticut, which NRI reports by

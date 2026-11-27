@@ -1,7 +1,7 @@
 // frontend/components/map/CountyInspector.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { CountyRecord } from '@/lib/types';
 import ExpectedLossSection from '@/components/map/ExpectedLossSection';
 import WildfireModelSection from '@/components/map/WildfireModelSection';
@@ -12,14 +12,36 @@ interface Props {
 }
 
 export default function CountyInspector({ county, onBackToState }: Props) {
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
+
+  // Collapse the dropdown when switching counties
+  useEffect(() => {
+    setAlertsExpanded(false);
+  }, [county.fips, county.name]);
+
   const getBadgeColor = (tier: string) => {
     switch (tier) {
-      case 'Critical': return 'bg-[#7a221b] text-white';
-      case 'Elevated': return 'bg-[#ca6834] text-white';
-      case 'Moderate': return 'bg-[#e5ab58] text-gray-900';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'Critical':
+        return 'bg-[#7a221b] text-white';
+      case 'Elevated':
+        return 'bg-[#ca6834] text-white';
+      case 'Moderate':
+        return 'bg-[#e5ab58] text-gray-900';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
+
+  // Use structured alerts array if available; fallback to activeAlert string
+  const alertsList: string[] =
+    county.alerts && county.alerts.length > 0
+      ? county.alerts
+      : county.activeAlert
+        ? [county.activeAlert]
+        : [];
+
+  const headlineAlert = alertsList[0] ?? 'No active alerts';
+  const extraAlerts = alertsList.slice(1);
 
   return (
     <aside className="w-full lg:w-88 bg-white border border-gray-200/90 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
@@ -27,6 +49,7 @@ export default function CountyInspector({ county, onBackToState }: Props) {
         {/* Navigation breadcrumb */}
         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
           <button
+            type="button"
             onClick={onBackToState}
             className="text-xs text-gray-500 hover:text-black flex items-center gap-1 font-mono cursor-pointer"
           >
@@ -41,24 +64,66 @@ export default function CountyInspector({ county, onBackToState }: Props) {
             <h2 className="text-xl font-black text-gray-950 tracking-tight">{county.name}</h2>
             <p className="text-xs text-gray-500 font-mono mt-0.5">Pop: {county.pop}</p>
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <span className="text-2xl font-black font-mono text-gray-900 block leading-none">
               {county.compositeScore}
               <span className="text-xs font-normal text-gray-400">/100</span>
             </span>
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block mt-1 ${getBadgeColor(county.tier)}`}>
+            <span
+              className={`inline-flex items-center justify-center text-center whitespace-nowrap text-[10px] font-semibold leading-none px-2.5 py-1 rounded-full mt-1.5 ${getBadgeColor(county.tier)}`}
+            >
               {county.tier}
             </span>
           </div>
         </div>
 
-        {/* Live Warning Banner */}
+        {/* Live Warning Banner with Expandable Dropdown */}
         <div className="mt-4 p-3 bg-amber-50 border border-amber-200/80 rounded-xl">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
             <span className="inline-block w-2 h-2 rounded-full bg-amber-600 animate-pulse" />
             Live Threat Advisory
           </div>
-          <p className="text-[11px] text-amber-800 mt-1 leading-snug">{county.activeAlert ?? 'No active alerts'}</p>
+
+          <div className="text-[11px] text-amber-800 mt-1 leading-snug">
+            <span>{headlineAlert}</span>
+
+            {extraAlerts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAlertsExpanded((prev) => !prev)}
+                aria-expanded={alertsExpanded}
+                className="ml-1.5 inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold text-amber-900 hover:text-amber-950 underline decoration-amber-400 hover:decoration-amber-800 cursor-pointer"
+              >
+                <span>{alertsExpanded ? 'Show less' : `+${extraAlerts.length} more`}</span>
+                <svg
+                  className={`w-3 h-3 transition-transform duration-150 ${alertsExpanded ? 'rotate-180' : ''}`}
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {alertsExpanded && extraAlerts.length > 0 && (
+            <ul className="mt-2.5 pt-2 border-t border-amber-200/80 space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              {extraAlerts.map((alertText, idx) => (
+                <li
+                  key={`${alertText}-${idx}`}
+                  className="text-[11px] text-amber-900/90 leading-snug flex items-start gap-1.5"
+                >
+                  <span className="text-amber-500 select-none">•</span>
+                  <span>{alertText}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Sub-Hazard Scoring Breakdown */}

@@ -1,3 +1,4 @@
+# backend/app/services/risk.py
 """Builds the StateRecord, CountyRecord and MapValue responses the frontend consumes."""
 
 import asyncio
@@ -32,8 +33,8 @@ from app.schemas import (
     StateRecord,
     WildfireModelInfo,
 )
-from app.services.reference import County, CountyLosses, ReferenceData, State, StateLosses
 from app.services.alert_archive import load_archived_alerts
+from app.services.reference import County, CountyLosses, ReferenceData, State, StateLosses
 from app.services.snapshot import Snapshot, alert_importance, archive_note, build_snapshot, merge_signal
 from app.services.wildfire_model import WildfireModelSource
 
@@ -184,6 +185,7 @@ class RiskService:
             population=_format_population(state.population),
             active_alert_count=len(alerts) if snapshot.nws_available else None,
             primary_alert=_state_primary_alert(snapshot, state, alerts),
+            alerts=_state_alerts_list(snapshot, state, alerts),
             hazards=self._state_hazards(snapshot, state),
             wildfire_model=_model_info(snapshot, snapshot.state_model.get(code), None),
             expected_loss=self._state_expected_loss(code),
@@ -244,6 +246,7 @@ class RiskService:
             fips=county.fips,
             pop=_format_population(county.population),
             active_alert=_county_active_alert(snapshot, county),
+            alerts=_county_alerts_list(snapshot, county),
             hazards=hazards,
             wildfire_model=_model_info(
                 snapshot,
@@ -448,7 +451,6 @@ class RiskService:
         label = hazard.label.lower()
         noun = _plural(count, f"federal {label} declaration", f"federal {label} declarations")
         return f"{noun} since {since}"
-
 
     def _loss_map_values(
         self, level: MapLevel, metric: MapMetric, hazard: Hazard | None
@@ -719,6 +721,24 @@ def _county_active_alert(snapshot: Snapshot, county: County) -> str | None:
     return f"{alerts[0].headline}{extra}{_archive_suffix(snapshot)}"
 
 
+def _county_alerts_list(snapshot: Snapshot, county: County) -> list[str] | None:
+    """Return all active alert headlines for a county, most important first.
+
+    Args:
+        snapshot: The current snapshot.
+        county: The county.
+    Returns:
+        Ordered list of alert headlines, or None if NWS is unavailable or there are no alerts.
+    Called by: RiskService.get_county.
+    """
+    if not snapshot.nws_available:
+        return None
+    alerts = snapshot.alerts.get(county.fips)
+    if not alerts:
+        return None
+    return [alert.headline for alert in alerts]
+
+
 def _unique_alerts(snapshot: Snapshot, state: State) -> list[Alert]:
     """Collect a state's active alerts, counting each alert once.
 
@@ -759,3 +779,32 @@ def _state_primary_alert(snapshot: Snapshot, state: State, alerts: list[Alert]) 
     others = sum(1 for alert in alerts if alert.event != top_event)
     extra = f" (+{_plural(others, 'other alert', 'other alerts')})" if others else ""
     return f"{top_event} in {_plural(len(counties), 'county', 'counties')}{extra}{_archive_suffix(snapshot)}"
+
+
+def _state_alerts_list(snapshot: Snapshot, state: State, alerts: list[Alert]) -> list[str] | None:
+    """Return all distinct statewide alert types formatted with county counts, primary first.
+
+    Args:
+        snapshot: The current snapshot.
+        state: The state.
+        alerts: The state's distinct alerts, from _unique_alerts.
+    Returns:
+        Ordered list like ["Flood Advisory in 4 counties", "Wind Advisory in 2 counties"],
+        or None if NWS is unavailable or there are no alerts.
+    Called by: RiskService.get_state.
+    """
+    if not snapshot.nws_available or not alerts:
+        return None
+
+    in_state = set(state.county_fips)
+    sorted_alerts = sorted(alerts, key=alert_importance, reverse=True)
+
+    counties_by_event: dict[str, set[str]] = {}
+    for alert in sorted_alerts:
+        matched_counties = set(alert.county_fips) & in_state
+        counties_by_event.setdefault(alert.event, set()).update(matched_counties)
+
+    return [
+        f"{event} in {_plural(len(counties), 'county', 'counties')}"
+        for event, counties in counties_by_event.items()
+    ]
