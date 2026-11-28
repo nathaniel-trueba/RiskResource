@@ -196,19 +196,20 @@ export default function AboutDataPage() {
             About the Data
           </h1>
           <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-5 leading-relaxed max-w-2xl">
-            Risk Resource aggregates natural disaster data from government agencies such as FEMA, the
-            National Weather Service and USGS. We structure these large datasets into information that
-            helps people answer, <em>&ldquo;How concerned should I be about my property?&rdquo;</em> Our threat score
-            combines each county&apos;s disaster history since 2006, live threats and conditions, and a weekly
-            wildfire model. FEMA&apos;s estimates of disaster costs, community vulnerability and resilience are
-            presented alongside it.
+            Hazard information is scattered across agency sites (NOAA, USGS, FEMA) that were not built
+            for a resident asking &ldquo;how worried should I be about my house, right now?&rdquo; Risk
+            Resource answers that, combining natural disaster data across government agencies reporting
+            disaster history, live warnings, and our own wildfire forecast model, resulting in a single
+            threat score. A user enters an address and gets a composite risk score, a per-hazard breakdown,
+            a map of the live data behind it, a plain-language explanation, and safety resources for the
+            top hazard.
           </p>
         </section>
 
         {/* Scoring Architecture Schematic */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-8">
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">How the score is calculated</h2>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">How The Score is Calculated</h2>
           </div>
 
           <div className="space-y-4">
@@ -224,8 +225,7 @@ export default function AboutDataPage() {
                     50 / 50
                   </div>
                   <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
-                    Each hazard combines a historical percentile baseline and live conditions, split 50/50. Historical rankings use FEMA declarations since 2006; earthquakes use USGS M4.5+ events within 60 miles.
-                  </p>
+                    Historical record + live conditions, scored for each of the 6 hazards                  </p>
                 </div>
               </div>
 
@@ -319,8 +319,9 @@ export default function AboutDataPage() {
                   Estimated Yearly Cost
                 </div>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
-                  FEMA&apos;s National Risk Index (December 2025) models average annual losses to
-                  buildings and crops, plus the dollar-valued estimates of deaths and injuries.
+                  FEMA&apos;s National Risk Index estimates the average annual financial impact of
+                  disasters across three areas: damage to buildings, losses to crops, and the dollar
+                  value of injuries and lives lost.
                   These are estimates, not observed losses, and do not change with live conditions.
                 </p>
               </div>
@@ -336,8 +337,8 @@ export default function AboutDataPage() {
                   Top 20% Nationwide
                 </div>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
-                  A county is <em className="text-gray-900 dark:text-gray-200">high-loss</em> when its
-                  expected annual loss per person ranks in the top 20% of U.S. counties.
+                  Counties ranking in the top 20% nationwide for expected loss per person are flagged
+                  as <em className="text-gray-900 dark:text-gray-200">high-loss</em>.
                 </p>
               </div>
             </div>
