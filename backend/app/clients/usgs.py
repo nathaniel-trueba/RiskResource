@@ -1,4 +1,4 @@
-"""USGS Earthquake Catalog: recent earthquakes. See claude-docs/apis-usage.md."""
+"""USGS Earthquake Catalog: recent earthquakes. See docs/apis-usage.md."""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta

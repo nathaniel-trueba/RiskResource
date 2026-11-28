@@ -1,10 +1,10 @@
 # External API usage
 
-Audience: developers and coding agents working on the backend.
+Audience: developers and coding agents working on the backend, the frontend or the scheduled jobs.
 
-This doc lists exactly what the backend calls and what it does with the results. For how the pieces fit together, see [`backend-doc.md`](backend-doc.md). For the list of APIs the team chose, see [`apis.md`](apis.md).
+This doc lists exactly what each part of the project calls and what it does with the results: the API, its monthly reference data rebuild, the AWS jobs, and the browser. For how the pieces fit together, see [`backend-doc.md`](backend-doc.md). For a short list of every API with its documentation link, see [`apis.md`](apis.md).
 
-Snapshot: 2026-11-18, matching `main` at `c25e614`. The backend's API calls haven't changed since 2026-11-14 (`221a0c8`), when the limits and row counts below were documented or observed. Updated 2026-11-26 for the wildfire model's weekly job (NASA POWER) and the NWS alert archive.
+Last checked against the code on 2026-11-27 (`main` at `39e2ecf`). Limits and row counts were observed between 2026-11-14 and 2026-11-26.
 
 The backend also uses a Supabase Postgres database. That's our own storage, not an external data API, so it's covered in [`backend-doc.md`](backend-doc.md#8-database) instead.
 
@@ -17,19 +17,22 @@ The backend also uses a Supabase Postgres database. That's our own storage, not 
 | [Open-Meteo forecast](#open-meteo-forecast) | Runtime | County opened, cached 30 min | One county | 48/day per county | Wind and fire weather |
 | [NWPS gauges](#nwps-gauges) | Runtime | County opened, cached 15 min | One county's box | 96/day per county | River flood status |
 | [Open-Meteo geocoding](#open-meteo-geocoding) | Runtime | Search with no county match, cached 24 h | One query | 1/day per query | City and ZIP search |
-| [OpenFEMA](#openfema-disaster-declarations) | Build script | Manual | Since 2006 | 4 calls per build | Historical baseline |
-| [USGS history](#usgs-earthquake-history) | Build script | Manual | US, since 2006 | 1 call per build | Earthquake baseline |
-| [Census population](#census-population-estimates) | Build script | Manual | All counties | 2 files per build | Population |
-| [County GeoJSON](#county-boundaries) | Build script | Manual | All counties | 1 file per build | County list, locations |
-| [FEMA National Risk Index](#fema-national-risk-index) | Build script | Manual | All NRI counties | 2 calls per build | Expected annual loss, vulnerability and resilience ratings |
+| [OpenFEMA](#openfema-disaster-declarations) | Build script | Monthly, or by hand | Since 2006 | 4 calls per build | Historical baseline |
+| [USGS history](#usgs-earthquake-history) | Build script | Monthly, or by hand | US, since 2006 | 1 call per build | Earthquake baseline |
+| [Census population](#census-population-estimates) | Build script | Monthly, or by hand | All counties | 2 files per build | Population |
+| [County GeoJSON](#county-boundaries) | Build script | Monthly, or by hand | All counties | 1 file per build | County list, locations |
+| [FEMA National Risk Index](#fema-national-risk-index) | Build script | Monthly, or by hand | All NRI counties | 2 calls per build | Expected annual loss, vulnerability and resilience ratings |
+| [NWS alerts (archive)](#nws-alert-archive-aws-lambda) | AWS Lambda | Every 15 minutes | One call, whole US | 96/day | Alert history and the API's fallback |
 | [NASA POWER daily weather](#nasa-power-daily-weather) | Weekly job: AWS pipeline (`aws/wildfire_steps.py`) or `ml/wildfire/predict_week.py` | Mondays 06:00 UTC | Every POWER grid cell (~1,895) | ~1,895 calls per run | The wildfire model's weather inputs |
 | [Open-Meteo forecast (weekly job)](#open-meteo-forecast-weekly-job) | Same weekly job | Mondays 06:00 UTC | 50 cells per call | ~38 calls per run | The days POWER doesn't have yet |
 
-**None of them need an API key.** Every request sends the header `User-Agent: UCSD-Risk-Resource-NotForProfit`, set by `USER_AGENT` in [`app/config.py`](../backend/app/config.py). NWS rejects requests without a `User-Agent` (tested: 403).
+The browser also calls address search and map tile services directly; those are listed [at the end](#browser-calls-frontend).
+
+**None of them need an API key.** Every server-side request sends the header `User-Agent: UCSD-Risk-Resource-NotForProfit`, set by `USER_AGENT` in [`app/config.py`](../backend/app/config.py). NWS rejects requests without a `User-Agent` (tested: 403).
 
 Census, county GeoJSON and geocoding were added because none of the listed APIs provide population, county names or a way to resolve cities and ZIP codes. The NRI was added to supply the expected-loss figures. All four are now listed in [`apis.md`](apis.md).
 
-"Build script" means [`scripts/build_reference_data.py`](../backend/scripts/build_reference_data.py), run by `python -m scripts.init_db --refresh`. Its output is saved to `data/reference.json` and seeded into the database.
+"Build script" means [`scripts/build_reference_data.py`](../backend/scripts/build_reference_data.py). The deployed API runs it itself once the stored data is 30 days old (`services/reference_refresh.py`), and `python -m scripts.init_db --refresh` runs it by hand. Either way the result is seeded into the database; only the manual run also rewrites `data/reference.json`.
 
 ## Why some APIs are only used per county
 
@@ -157,7 +160,7 @@ Many gauges aren't useful: in a nationwide check, about 44% of 12,961 reported s
 
 - A 429 makes the client pause all NWPS calls for 5 minutes (`RATE_LIMIT_BACKOFF_SECONDS`).
 - Don't call this API repeatedly while testing.
-- Before a live demo, open `/api/health` and check that `nwps` isn't `degraded`.
+- If gauges seem missing, open `/api/health` and check whether `nwps` is `degraded`.
 
 **If it fails:** the Flood warning adds "(live data unavailable)". NWS flood alerts still score normally, so flooding with an active alert is still reflected.
 
@@ -186,7 +189,7 @@ Results without `admin1` or `admin2` are skipped.
 
 ## Build-time sources
 
-Only [`scripts/build_reference_data.py`](../backend/scripts/build_reference_data.py) uses these, through `python -m scripts.init_db --refresh`. The output is committed as `data/reference.json` and seeded into Supabase. **A running API never calls them**, so they can't affect a demo. A full refresh took about 20 seconds at this snapshot.
+Only [`scripts/build_reference_data.py`](../backend/scripts/build_reference_data.py) uses these: automatically once a month from the running API, or by hand with `python -m scripts.init_db --refresh`. **No request ever waits on them.** The monthly rebuild runs in a background thread, and if any source fails nothing is written and the old data stays. A full refresh takes about 20 seconds.
 
 ### OpenFEMA disaster declarations
 
@@ -294,7 +297,7 @@ Pages are fetched until the response no longer has `exceededTransferLimit`. Ther
 
 The wildfire model's weather is fetched once a week, outside the API. The API only reads the published scores document (`WILDFIRE_MODEL_URI`).
 
-- **On AWS (production):** every Monday at 06:00 UTC, EventBridge Scheduler starts a Step Functions state machine ([`aws/wildfire_state_machine.json`](../backend/aws/wildfire_state_machine.json)) that runs the three Lambdas in [`aws/wildfire_steps.py`](../backend/aws/wildfire_steps.py): `fetch_chunk` (NASA POWER, in 8 chunks, one at a time), `build_features` (the Open-Meteo forecast and the model's features), then `calibrate_and_publish`. It publishes `s3://riskresource-data-bucket/wildfire/latest.json`.
+- **On AWS (production):** every Monday at 06:00 UTC, EventBridge Scheduler starts a Step Functions state machine ([`aws/wildfire_state_machine.json`](../backend/aws/wildfire_state_machine.json)) that runs the three Lambdas in [`aws/wildfire_steps.py`](../backend/aws/wildfire_steps.py): `fetch_chunk` (NASA POWER, in 8 chunks, one at a time), `build_features` (the Open-Meteo forecast and the model's features), then `calibrate_and_publish`. It publishes `s3://riskresource-data-bucket/wildfire/latest.json`. The pipeline is described in [`wildfire-model.md`](wildfire-model.md#7-the-weekly-aws-pipeline).
 - **Locally:** [`ml/wildfire/predict_week.py`](../backend/ml/wildfire/predict_week.py) makes the same calls in one run (about 30 minutes) and publishes to `WILDFIRE_MODEL_URI`, by default `backend/data/wildfire_model.json`.
 
 ### NASA POWER daily weather
@@ -341,9 +344,23 @@ GET https://power.larc.nasa.gov/api/temporal/daily/point
 
 **If it fails:** failed POWER cells and Open-Meteo batches are logged and skipped. On AWS, a chunk fails (and is retried) if more than 5% of its cells fail (`WILDFIRE_CHUNK_MAX_FAILED`). Counties with no weather for the week are left out of the file, and their overall score uses the hazards alone.
 
+## Browser calls (frontend)
+
+These are called from the visitor's browser, not the backend, so each visitor has their own quota. None needs a key, and none receives our User-Agent (browsers set their own). Details of how the search boxes combine them are in [`frontend-doc.md`](frontend-doc.md#address-search).
+
+| API | Request | Used for |
+|---|---|---|
+| [Photon](https://photon.komoot.io/) (komoot, OpenStreetMap data) | `GET https://photon.komoot.io/api/?q={text}&bbox=-179.15,18.91,-66.95,71.39&limit={1 to 5}` | Address and place suggestions as the user types. Reads `geometry.coordinates` and `properties` (`housenumber`, `street`, `name`, `city`, `county`, `state`, `postcode`, `countrycode`). Non-US results are dropped |
+| [FCC Census Area API](https://geo.fcc.gov/api/census/) | `GET https://geo.fcc.gov/api/census/area?lat={lat}&lon={lng}&format=json` | Turns a picked address into a county: reads `results[0].county_fips` |
+| [Nominatim](https://nominatim.openstreetmap.org/) (OpenStreetMap) | `GET https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&limit=1&q={text}` | Home page search only, when Enter is pressed with no suggestion. Reads `lat`, `lon` and `display_name` |
+| State and county GeoJSON | The folium and Plotly files on `raw.githubusercontent.com` (the county file is the same one the build script uses) | Map polygons |
+| Basemap tiles | CARTO `basemaps.cartocdn.com/rastertiles/light_all` with `NEXT_PUBLIC_CARTO_API_KEY`, otherwise `tile.openstreetmap.org` | The map's background |
+
+**If they fail:** address suggestions just don't appear, and picking one shows "Address lookup failed". County, city and ZIP search still works through the backend.
+
 ## Adding or changing an API call
 
 1. Put the HTTP call and parsing in `app/clients/`, returning plain dataclasses.
 2. Fetch it through `TTLCache`, so that it's cached and failures are handled.
 3. Check its limits against the worst case: every visitor shares one quota.
-4. Update this doc: the summary table, the exact request, and every field read.
+4. Update this doc: the summary table, the exact request, and every field read. Also add it to [`apis.md`](apis.md).

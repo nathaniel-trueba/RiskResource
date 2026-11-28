@@ -5,6 +5,10 @@ wildfire starts in that county that week**. It's 20% of the site's overall threa
 (40% historical, 40% live, 20% this model), which gives the overall score a wildfire
 bias. See [Weekly scores for the API](#weekly-scores-for-the-api).
 
+This README covers the model code and its results. For the end-to-end picture, including
+the weekly AWS pipeline and how to operate it, see
+[`docs/wildfire-model.md`](../../../docs/wildfire-model.md).
+
 - Supervised binary classification, one row per county per week (Monday to Sunday).
 - Fires are rare (about 0.2% of county-weeks), so fire rows are weighted with
   `scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum()`, and early
@@ -187,8 +191,9 @@ python -m jupyter nbconvert --to notebook --execute --inplace 02_train_evaluate.
 
 ## Weekly scores for the API
 
-The API doesn't load this model. Once a week, from `backend/` with the ML dependencies
-installed:
+The API doesn't load this model. In production, an AWS Step Functions pipeline scores
+every county each Monday at 06:00 UTC ([`docs/wildfire-model.md`](../../../docs/wildfire-model.md#7-the-weekly-aws-pipeline)).
+To do the same locally, from `backend/` with the ML dependencies installed:
 
 ```bash
 python -m ml.wildfire.predict_week                    # This week (Monday on or before today, UTC)
@@ -210,7 +215,7 @@ score on a log scale (`wildfire_model_score` in `app/domain/scoring.py`: 0.01% i
 1% is 67, 10% or more is 100). The file counts for 13 days after its Monday; after
 that, and for counties missing from it, the overall score uses the hazards alone.
 
-On AWS, an EventBridge schedule calls `lambda_handler` in `handler.py`, which runs the same `score_week` and `publish`. See its docstring for packaging and the 15-minute Lambda limit.
+The AWS pipeline (`backend/aws/wildfire_steps.py`) splits the same work into three Lambdas, because the whole job is longer than Lambda's 15 minutes. `handler.py` runs it in one call instead, for a container service with no time limit; production doesn't use it.
 
 **Not yet validated on forecast inputs.** Check a few weeks of output against where fires
 actually started before relying on it.
@@ -233,18 +238,17 @@ drivers = model.explain(X)                      # SHAP: what pushes each county 
 observed (NASA POWER's near-real-time data lags a few days), and the week itself
 comes from a forecast.
 
-Things `predict_week.py` handles, and what's still open:
+How the weekly runs handle the remaining questions:
 
-- **Forecast weather.** The model learned from reanalysis weather. A forecast from
-  Open-Meteo has different biases, especially for wind and humidity. Map Open-Meteo's
-  variables onto the POWER names (`temperature_2m_max`, `dew_point_2m_mean`,
-  `relative_humidity_2m_mean`, `wind_speed_10m_max` in m/s, `precipitation_sum`), and
-  check that the scores look sensible before relying on them. Soil wetness only uses
-  the days before the week, so it can come from POWER.
-- **Turning the probability into a 0-100 score.** Weekly probabilities are small (a
-  typical county-week is well under 1%), so a linear scale would put almost everyone
-  near 0. A percentile or log scale, or the ratio to the county's usual probability
-  for that week, works better. The ratio also shows how far this week is from
-  baseline.
-- **"What's raising the score."** `explain()` returns per-feature contributions. Group
-  them for the website (weather this week, dryness before it, history, location).
+- **Forecast weather.** The model learned from reanalysis weather. `predict_week.py` and
+  the AWS pipeline map Open-Meteo's forecast variables onto the POWER names
+  (`temperature_2m_max`, `dew_point_2m_mean`, `relative_humidity_2m_mean`,
+  `wind_speed_10m_max` in m/s, `precipitation_sum`). Open-Meteo has different biases,
+  especially for wind and humidity, and the live scores haven't yet been checked
+  against where fires actually started. Soil wetness only uses the days before the
+  week, so it comes from POWER.
+- **Turning the probability into a 0-100 score.** Decided: a log scale in the API
+  (`wildfire_model_score`), because weekly probabilities are small and a linear scale
+  would put almost every county near 0.
+- **"What's raising the score."** `explain()` returns per-feature SHAP contributions,
+  but the website doesn't show them yet.

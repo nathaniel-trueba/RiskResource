@@ -33,7 +33,7 @@ Environment variables:
                                  chunk fails (default 0.05)
 
 Packaged as a container image with ml/, weekly_scores/ and this file. See
-aws/wildfire.Dockerfile and davanam-temp/aws-step-by-step/04-packaging.md.
+aws/wildfire.Dockerfile and docs/wildfire-model.md.
 """
 
 from __future__ import annotations

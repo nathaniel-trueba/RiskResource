@@ -4,23 +4,26 @@ Natural disaster information is spread across many different agency websites and
 
 ## What It Does
 
-Risk Resource is a website that scores every US state and county for six natural hazards: **wildfire, earthquake, flood, severe storm, hurricane and tornado**. It combines decades of disaster history with what's happening right now, so you can see both what usually threatens a place and what threatens it this week.
+Risk Resource is a website that scores every US state and county for six natural hazards: **wildfire, earthquake, flood, severe storm, hurricane and tornado**. It combines nearly two decades of disaster history with what's happening right now, so you can see both what usually threatens a place and what threatens it this week.
 
 **Home page (`/`)**
-- Search for a county, city or ZIP code to jump straight to its risk details.
-- An animated US map that cycles through each hazard, state by state.
-- A sample score card with a county picker, showing how a county's hazards stack up.
+- Search for any US street address, city, ZIP code or county to jump straight to its county on the risk map.
+- An animated US map that cycles through five hazards, coloring each state by its score.
+- A live score card for a list of saved places. You can add your own (by address, city, ZIP or county) or remove them, and the list is remembered in your browser.
 
 **Risk map (`/map`)**
-- An interactive map you can switch between **states** and **counties**.
+- An interactive map you can switch between **states** and **counties**, or zoom from a state into its counties.
 - Color the map by the **overall risk score**, a single hazard's score, **expected annual loss** (total or per person), **social vulnerability** or **community resilience**.
 - Click any state or county to open a side panel with:
-  - The overall risk score (0 to 100) and its tier: Low, Moderate, Elevated or Critical
+  - The overall risk score (0 to 100) and its tier: **Low** (0–29), **Moderate** (30–49), **Elevated** (50–74) or **Critical** (75–100)
   - A score for each hazard, with the reasons behind it (for example "Red Flag Warning active" or "M4.9 earthquake 9 km N of ...")
-  - Active NWS weather alerts for that area
-  - For counties: the next 24 hours of wind and fire weather, and nearby river gauge flood levels
+  - A dropdown listing the active NWS weather alerts for that area
+  - For counties, those reasons also draw on the next 24 hours of wind and fire weather and on nearby river gauge flood levels
   - This week's wildfire model estimate: the chance a large wildfire starts in the county
-  - FEMA's estimate of the dollars lost to each hazard in an average year
+- Below the map, FEMA's estimate of the dollars the selected area loses to each hazard in an average year.
+- Search the map by county, city, ZIP code or street address.
+
+The same tier colors are used everywhere on the site (badges, hazard bars, map shading and the /about page), so a color always means the same tier. The site has a light and a dark theme.
 
 **About page (`/about`)**
 - A plain-language explanation of how the score is built, what each data source contributes and how FEMA's expected loss figures work.
@@ -31,9 +34,9 @@ Every score is on a 0 to 100 scale. The **overall risk score** is built from thr
 
 | Part | Weight | What it measures | Where it comes from | How often it updates |
 |------|--------|------------------|---------------------|----------------------|
-| **Historical baseline** | 40% | How often each hazard has hit the area since 2006 | FEMA disaster declarations, USGS earthquake history | Rebuilt manually (`init_db --refresh`) |
+| **Historical baseline** | 40% | How often each hazard has hit the area since 2006 | FEMA disaster declarations, USGS earthquake history | Automatically rebuilt once it's 30 days old |
 | **Live signal** | 40% | What's happening right now | NWS alerts, recent USGS earthquakes, Open-Meteo forecast, NOAA river gauges | Every few minutes, on demand |
-| **Wildfire model** | 20% | The chance a large wildfire starts in the county this week | XGBoost model run on NASA POWER and Open-Meteo weather | Weekly, on AWS |
+| **Wildfire model** | 20% | The chance a large wildfire starts in the county this week | XGBoost model run on NASA POWER and Open-Meteo weather | Weekly (Mondays), on AWS |
 
 How the parts fit together:
 
@@ -61,7 +64,7 @@ Everything comes from free, public sources. None of them need an API key; every 
 | [NOAA NWPS Gauges API](https://api.water.noaa.gov/nwps/v1/docs/) | River gauges inside a county: name and observed and forecast flood category (action, minor, moderate, major) | Live flood signal, when a county is opened |
 | [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api) | US place names with their state and county | Search by city or ZIP code |
 
-### Reference data (built ahead of time and stored in the database)
+### Reference data (stored in the database, rebuilt monthly)
 
 | Source | What we collect | Used for |
 |--------|-----------------|----------|
@@ -80,17 +83,25 @@ Everything comes from free, public sources. None of them need an API key; every 
 | [MTBS fire occurrence data](https://www.mtbs.gov/) (training only) | Large wildfires since 1984: ignition date and location | The model's training labels and each county's fire history |
 | [Open-Meteo Elevation API](https://open-meteo.com/en/docs/elevation-api) (training only) | Elevation at each county's center | A model input |
 
-Exactly how each source is called, which fields are read, and each one's rate limits are in [claude-docs/apis-usage.md](claude-docs/apis-usage.md).
+### Address search (called from the visitor's browser)
+
+| Source | What we collect | Used for |
+|--------|-----------------|----------|
+| [Photon](https://photon.komoot.io/) (OpenStreetMap data) | Address and place suggestions with their coordinates, limited to the US | Suggestions as you type in any search box |
+| [FCC Census Area API](https://geo.fcc.gov/api/census/) | The county FIPS code for a latitude and longitude | Turning a chosen address into a county |
+| [Nominatim](https://nominatim.openstreetmap.org/) (OpenStreetMap) | One geocoded result for the typed text | Home page search, when there's no suggestion to pick |
+
+Exactly how each source is called, which fields are read, and each one's rate limits are in [docs/apis-usage.md](docs/apis-usage.md).
 
 ## Tech Stack
 
 | Area | Tools |
 |------|-------|
-| Frontend | Next.js, React, TypeScript, Tailwind CSS, Leaflet |
-| Backend API | Python, FastAPI, Pydantic, httpx, psycopg |
+| Frontend | Next.js, React, TypeScript, Tailwind CSS, Leaflet, hosted on Vercel |
+| Backend API | Python, FastAPI, Pydantic, httpx, psycopg, hosted on Railway |
 | Database | PostgreSQL, hosted on Supabase |
 | Machine learning | XGBoost, scikit-learn (calibration), pandas, Shapely, Jupyter, matplotlib |
-| Cloud (AWS) | See below |
+| Cloud (AWS) | Lambda, EventBridge, Step Functions, S3, ECR, CloudWatch Logs (see below) |
 
 ### AWS
 
@@ -108,10 +119,11 @@ AWS runs the two jobs that happen on a schedule, outside the API:
 - **NWS alert archiver** ([`backend/aws/lambda_function.py`](backend/aws/lambda_function.py)): NWS only serves alerts that are active *now*, so every 15 minutes this copies them into Supabase. That builds a year of alert history per county and gives the API a recent copy to fall back on if NWS goes down.
 - **Weekly wildfire pipeline** ([`backend/aws/wildfire_steps.py`](backend/aws/wildfire_steps.py), [`wildfire_state_machine.json`](backend/aws/wildfire_state_machine.json)): downloads the weather, runs the wildfire model for every county and publishes the scores to S3. The model itself runs in under a second, so it needs no SageMaker.
 
+The monthly reference data rebuild doesn't use AWS. The API does it itself: every hour it checks how old the data in Supabase is, and once it's more than 30 days old it rebuilds it from FEMA, USGS, Census and the NRI and swaps it in without a restart. If a source fails, the old data stays. `/api/health` shows when the data was built and when the next rebuild is due.
+
 ### Architecture
 
-<!-- TODO: add the architecture diagram PNG (e.g. docs/architecture.png) and update the path below. -->
-![Risk Resource architecture diagram](docs/architecture.png)
+![Risk Resource architecture diagram](static/Architecture.png)
 
 ## Repository Structure
 
@@ -123,9 +135,9 @@ RiskResource/
 │   │   ├── core/            In-memory cache for live feeds
 │   │   ├── domain/          Scoring rules and hazard tables, no I/O
 │   │   ├── routers/         HTTP endpoints, one module per endpoint group
-│   │   └── services/        Combines reference data, live signals and scoring into responses
+│   │   └── services/        Builds responses, plus the alert fallback and monthly data refresh
 │   ├── aws/                 AWS Lambda code, container image and Step Functions definition
-│   ├── data/                Committed reference data snapshot that seeds the database
+│   ├── data/                Committed reference data snapshot that seeds an empty database
 │   │   └── snapshot/        Fixed scores for the home page's hazard map animation
 │   ├── db/                  Postgres schema
 │   │   └── migrations/      Schema changes for existing databases
@@ -133,50 +145,50 @@ RiskResource/
 │   │   └── wildfire/        Wildfire model: dataset building, training and weekly scoring
 │   │       ├── artifacts/   Trained model, calibration and precomputed features
 │   │       └── notebooks/   Data exploration, training results and example predictions
-│   ├── scripts/             Database setup and reference data rebuild
+│   ├── scripts/             Database setup and manual reference data rebuild
 │   └── weekly_scores/       Shared format and storage for the weekly wildfire scores
-├── claude-docs/             Detailed docs for developers and coding agents
+├── docs/                    Detailed docs for developers and coding agents
 └── frontend/                Next.js site
     ├── app/                 Pages: home, /map and /about
     ├── components/          UI components, grouped by page (about, common, home, map)
-    └── lib/                 API calls, types, formatting, colors and scoring helpers
+    └── lib/                 API calls, types, formatting, tier colors and scoring helpers
+├── static/                  Images for this README (the architecture diagram)
 ```
 
 ## Documentation
 
-<!--
-  HUMAN REVIEW NEEDED: decide what to do with this section before merging.
-  - Should claude-docs/ stay, be renamed (e.g. docs/), or be trimmed?
-  - Several of these docs carry snapshot dates (2026-11-18) and may be out of date.
-  - backend/ml/wildfire/README.md (the wildfire model) isn't listed below.
--->
-
 | Doc | For |
 |---|---|
 | [backend/README.md](backend/README.md) | Setting up and running the backend |
-| [claude-docs/backend-doc.md](claude-docs/backend-doc.md) | The API, scoring model, database, caching and deployment, in detail |
-| [claude-docs/frontend-doc.md](claude-docs/frontend-doc.md) | The frontend's structure, data flow and data contract |
-| [claude-docs/apis.md](claude-docs/apis.md), [apis-usage.md](claude-docs/apis-usage.md) | External APIs and exactly how they're called |
-| [claude-docs/human-review.md](claude-docs/human-review.md) | Decisions nobody has approved yet, and known issues, most important first |
+| [docs/backend-doc.md](docs/backend-doc.md) | The API, scoring model, database, caching and deployment, in detail |
+| [docs/frontend-doc.md](docs/frontend-doc.md) | The frontend's structure, data flow, address search and data contract |
+| [docs/wildfire-model.md](docs/wildfire-model.md) | The wildfire model end to end: what it predicts, training, the weekly AWS pipeline, and how to operate and retrain it |
+| [backend/ml/wildfire/README.md](backend/ml/wildfire/README.md) | The wildfire model's code, features and full results |
+| [docs/apis.md](docs/apis.md), [docs/apis-usage.md](docs/apis-usage.md) | Every external API, and exactly how each one is called |
+
+Each doc ends with known issues or limitations where there are any.
 
 ## Backend Setup
 
-See [backend/README.md](backend/README.md) for the backend's architecture and details.
+See [backend/README.md](backend/README.md) for the backend's architecture and details. It needs Python 3.11 or newer.
 
 The API reads its reference data (states, counties, baseline hazard scores) from a
 Supabase Postgres database. Only the backend talks to Supabase.
 
 1. Copy `backend/env.example` to `backend/.env` and set `DATABASE_URL` to the
    Supabase **session pooler** connection string, with the real database password.
-2. Install dependencies: `pip install -r backend/requirements.txt`
-3. Start the API (from `backend/`): `python -m uvicorn app.main:app --reload`. It runs
+2. In the same file, set `REFERENCE_MAX_AGE_DAYS=0`. This stops your local backend from
+   running the monthly rebuild against the database the whole team shares; the deployed
+   backend handles it.
+3. Install dependencies: `pip install -r backend/requirements.txt`
+4. Start the API (from `backend/`): `python -m uvicorn app.main:app --reload`. It runs
    at http://localhost:8000, with interactive docs at http://localhost:8000/docs.
 
 On startup the API creates any missing tables from `backend/db/schema.sql` and,
 if the reference data is empty, seeds it from the committed `data/reference.json`
 snapshot. Both happen only once; later startups just read the data.
 
-To replace data that's already seeded (from `backend/`):
+To replace data that's already seeded by hand (from `backend/`):
 - `python -m scripts.init_db --reseed` reloads it from `data/reference.json`
 - `python -m scripts.init_db --refresh` rebuilds it from FEMA, USGS, Census and the NRI
   (about a minute), updates `data/reference.json`, then reseeds
@@ -193,10 +205,10 @@ npm run dev        # http://localhost:3000
 ```
 
 The site calls the backend at `NEXT_PUBLIC_API_URL`, which defaults to
-`http://localhost:8000/api`. A deployed site needs it set to the deployed backend's URL
-(plus `/api`) at build time; see
-[claude-docs/backend-doc.md](claude-docs/backend-doc.md#deploying).
+`http://localhost:8000/api`. The Vercel deployment sets it to the Railway backend's URL
+plus `/api`, at build time; see
+[docs/backend-doc.md](docs/backend-doc.md#deploying).
 
-## Disclaimer **
+## Disclaimer
 
 Risk Resource is intended for informational purposes only and is not a substitute for official warnings or evacuation orders.
