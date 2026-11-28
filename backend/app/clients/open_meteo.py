@@ -1,4 +1,4 @@
-"""Open-Meteo: weather forecast and place search. See claude-docs/apis-usage.md."""
+"""Open-Meteo: weather forecast and place search. See docs/apis-usage.md."""
 
 from dataclasses import dataclass
 

@@ -2,21 +2,22 @@
 
 A FastAPI service that scores US states and counties for six natural hazards (wildfire,
 earthquake, flood, severe storm, hurricane, tornado) and serves those scores to the
-Next.js frontend.
+Next.js frontend. It runs on Railway; the full design is in
+[`docs/backend-doc.md`](../docs/backend-doc.md).
 
 The overall threat score is **40% historical, 40% live and 20% wildfire model**:
 
 - **Historical baseline:** how often a hazard has hit a place historically (FEMA disaster
-  declarations and USGS earthquakes since 2006). This is precomputed and stored in
-  Supabase Postgres.
+  declarations and USGS earthquakes since 2006). This is precomputed, stored in
+  Supabase Postgres, and rebuilt automatically once it's 30 days old.
 - **Live signal:** what's happening now (NWS alerts, recent USGS quakes, Open-Meteo
   forecasts, NOAA river gauges). It's fetched on demand and cached in memory.
 - **Wildfire model:** this week's chance of a large wildfire starting in the county, from
-  the XGBoost model in [`ml/wildfire/`](ml/wildfire/README.md). A weekly job
-  (`python -m ml.wildfire.predict_week`) publishes it to `WILDFIRE_MODEL_URI` (in production
-  `s3://riskresource-data-bucket/wildfire/latest.json`; locally `data/wildfire_model.json`, git-ignored), and the API reads
-  it from there, so the API itself doesn't need the ML dependencies. The two sides share
-  only [`weekly_scores/`](weekly_scores/__init__.py).
+  the XGBoost model in [`ml/wildfire/`](ml/wildfire/README.md). Every Monday an AWS Step
+  Functions pipeline (`aws/`) publishes it to `s3://riskresource-data-bucket/wildfire/latest.json`,
+  and the API reads it from `WILDFIRE_MODEL_URI`, so the API itself doesn't need the ML
+  dependencies. The two sides share only [`weekly_scores/`](weekly_scores/__init__.py).
+  See [`docs/wildfire-model.md`](../docs/wildfire-model.md).
 
 Historical and live are blended inside each hazard score (50/50, their 40:40 ratio).
 The model is added to the overall score only, which gives the overall score a
@@ -61,15 +62,26 @@ On the first start against an empty database, the API creates the tables and see
 them from `data/reference.json`, which takes a few seconds. Later starts only check
 that this was done. Interactive API docs are at http://localhost:8000/docs.
 
+### Local settings
+
+Add `REFERENCE_MAX_AGE_DAYS=0` to your `.env`. Otherwise your local API will rebuild the
+reference data in the database the whole team shares once it's 30 days old; the
+deployed API already does that. Leave `WILDFIRE_MODEL_URI` unset to read a local
+`data/wildfire_model.json` (from `python -m ml.wildfire.predict_week`), or point it at
+the S3 file if you have AWS credentials. Without either, the overall score uses the
+hazards alone.
+
 ### Deploying
 
-Run it as a long-running web service (for example on Render), not as serverless
-functions: it loads data at startup and caches live feeds in memory. Start command:
-`uvicorn app.main:app --host 0.0.0.0 --port $PORT`, from `backend/`. Set
-`DATABASE_URL`, and `CORS_ORIGINS` to a JSON list with the site's address, e.g.
-`["https://<site>.vercel.app"]`. Then set `NEXT_PUBLIC_API_URL` on the frontend to the
-backend's URL plus `/api`, and redeploy the frontend. Details and troubleshooting are in
-[`claude-docs/backend-doc.md`](../claude-docs/backend-doc.md#deploying).
+It's deployed on Railway as a long-running web service, which redeploys automatically on every
+push to `main`. It isn't run as serverless functions, because
+it loads data at startup, refreshes it on a timer, and caches live feeds in memory.
+Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, from `backend/`.
+Set `DATABASE_URL`, `CORS_ORIGINS` (a JSON list with the Vercel site's address),
+`WILDFIRE_MODEL_URI`, and the access key of the IAM user with read-only access to the
+bucket's `wildfire/` prefix. The frontend's
+`NEXT_PUBLIC_API_URL` must be this service's URL plus `/api`. Details and
+troubleshooting are in [`docs/backend-doc.md`](../docs/backend-doc.md#deploying).
 
 ### Database commands
 
@@ -80,6 +92,10 @@ You only need these to change data that's already seeded:
 | `python -m scripts.init_db` | Creates missing tables and seeds if empty. Startup does the same. |
 | `python -m scripts.init_db --reseed` | Replaces the reference data from `data/reference.json` |
 | `python -m scripts.init_db --refresh` | Rebuilds the data from FEMA, USGS, Census and the NRI (under a minute), saves it to `data/reference.json`, then reseeds |
+
+The deployed API runs the same rebuild by itself once the stored data is 30 days old
+(`services/reference_refresh.py`), without rewriting `data/reference.json`.
+`GET /api/health` shows when the data was built and when the next rebuild is due.
 
 ## Architecture
 
@@ -106,30 +122,38 @@ scoring decisions.
 ```
 backend/
 ├── app/
-│   ├── main.py            App factory and startup (lifespan): DB init, services, cache warm-up
+│   ├── main.py            App factory and startup (lifespan): DB init, services, background tasks
 │   ├── config.py          Settings from environment variables / .env (pydantic-settings)
 │   ├── db.py              Postgres connection, schema creation and reference data seeding
 │   ├── dependencies.py    FastAPI Depends helpers that return the startup-created services
 │   ├── schemas.py         API response models
-│   ├── routers/           One module per endpoint group (health, states, counties, ...)
+│   ├── routers/           One module per endpoint group (health, states, counties, map-values, search, home-snapshot)
 │   ├── services/
-│   │   ├── reference.py   Loads static county/state data from the DB into memory
-│   │   ├── snapshot.py    National scores for every county and state, from nationwide feeds
-│   │   ├── risk.py        Builds state, county and map responses
-│   │   └── search.py      Resolves county names, cities and ZIP codes to counties
+│   │   ├── reference.py          Loads static county/state data from the DB into memory
+│   │   ├── reference_refresh.py  Rebuilds the reference data once it's 30 days old
+│   │   ├── snapshot.py           National scores for every county and state, from nationwide feeds
+│   │   ├── risk.py               Builds state, county and map responses
+│   │   ├── search.py             Resolves county names, cities and ZIP codes to counties
+│   │   ├── wildfire_model.py     Reads the weekly wildfire scores file
+│   │   ├── alert_archive.py      Reads the Lambda's NWS alert archive during NWS outages
+│   │   └── home_snapshot.py      Fixed state scores for the home page animation
 │   ├── domain/
-│   │   ├── hazards.py     Hazard enum, plus FEMA and NWS mappings onto hazards
+│   │   ├── hazards.py     Hazard enum, plus FEMA, NWS and NRI mappings onto hazards
 │   │   ├── scoring.py     Every scoring rule and threshold
 │   │   └── geo.py         Point-to-bounding-box distance
 │   ├── clients/           One async client per upstream API
 │   └── core/cache.py      In-memory TTL cache that serves recent data during outages
+├── aws/                   NWS alert archive Lambda, and the weekly wildfire pipeline (Lambdas, Dockerfile, Step Functions)
 ├── db/schema.sql          The whole database schema (safe to re-run)
-├── data/reference.json    Committed snapshot of the reference data, used to seed the DB
+├── db/migrations/         One-off SQL for databases created before a schema change
+├── data/reference.json    Committed snapshot of the reference data, used to seed an empty DB
+├── data/snapshot/         Fixed scores for the home page animation
 ├── ml/wildfire/           XGBoost weekly wildfire ignition model (see its README.md).
-│                          Extra packages: requirements-ml.txt. Not wired into the API yet.
+│                          Extra packages: requirements-ml.txt
+├── weekly_scores/         The wildfire scores file format, shared by the model and the API
 └── scripts/
     ├── init_db.py             CLI: initialize, reseed or refresh the database
-    └── build_reference_data.py  Computes the reference data from FEMA, USGS and Census
+    └── build_reference_data.py  Computes the reference data from FEMA, USGS, Census and the NRI
 ```
 
 ### Startup
@@ -142,8 +166,9 @@ backend/
    NRI loss tables. Requests never query the database.
 3. The shared HTTP client, the TTL cache, the upstream clients and the two services are
    created and stored on `app.state`. Routes get them through `dependencies.py`.
-4. A background task builds the first national snapshot, so the first visitor doesn't
-   have to wait for it.
+4. Two background tasks start: one builds the first national snapshot, so the first
+   visitor doesn't have to wait for it, and one checks the reference data's age every
+   hour and rebuilds it when it's due.
 
 ### How a score is computed
 
@@ -165,10 +190,9 @@ backend/
   (75 to 100).
 
 All thresholds live in `domain/scoring.py` and `domain/hazards.py`. The frontend's
-`/about` page is meant to describe this model, so update it when you change a rule.
-Parts of it are currently out of date, including its score slider
-(`components/about/ScoreExplainer.tsx`), which shows a different formula. See
-[`claude-docs/human-review.md`](../claude-docs/human-review.md).
+`/about` page and its score slider (`components/about/ScoreExplainer.tsx`) describe this
+model, and `frontend/lib/scoring.ts` and `frontend/lib/riskColors.ts` mirror the weights
+and tier cutoffs, so update them when you change a rule.
 
 ### Upstream failures
 
@@ -177,7 +201,9 @@ memory, and concurrent requests share a single fetch. If a call fails, the cache
 the last good value for up to `MAX_STALE_SECONDS` (one hour) and waits
 `FAILURE_COOLDOWN_SECONDS` before retrying. After that, the source counts as unavailable:
 its hazards fall back to the baseline alone, and the response text says
-"(live data unavailable)". `GET /api/health` reports each source's status.
+"(live data unavailable)". NWS has one more fallback: the alerts the AWS Lambda archived
+in the last 90 minutes, labelled with their time. `GET /api/health` reports each
+source's status.
 
 ## Database
 
@@ -236,11 +262,12 @@ All endpoints are under `/api`, and all are `GET`.
 
 | Path | Returns |
 |---|---|
-| `/health` | Service status and each upstream source's cache state |
+| `/health` | Service status, each upstream source's cache state, the wildfire model file, and the reference data's age |
 | `/map-values?level=state\|county&metric=...&hazard=...` | One value per area, for colouring the map. `metric` is `compositeScore`, a hazard (its score), `lossPerPerson`, `totalLoss` or `highLossPct` (states only). `hazard` limits `lossPerPerson` and `totalLoss` to one hazard. Scores include a `tier` |
 | `/states/{code}` | State detail: scores, hazards, alerts, and `expectedLoss` |
 | `/counties/{fips}` | County detail, including forecast and river gauge signals, and `expectedLoss` (omitted without NRI data) |
 | `/search?q=...&limit=10` | Counties matching a county name, city or ZIP code |
+| `/home-snapshot` | Fixed state scores per hazard for the home page animation, from `data/snapshot/` |
 
 Response shapes are defined in `app/schemas.py` and mirror `frontend/lib/types.ts`. If
 you change one, change the other.

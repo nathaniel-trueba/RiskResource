@@ -2,23 +2,23 @@
 
 Audience: developers and coding agents working on the backend or connecting the frontend to it.
 
-Snapshot: 2026-11-18, matching `main` at `c25e614`, updated 2026-11-25 for the 40/40/20 overall score that adds the wildfire model ([section 5](#5-scoring-model)). If this doc and the code disagree, the code wins, and this doc should be updated.
+Last checked against the code on 2026-11-27 (`main` at `39e2ecf`). If this doc and the code disagree, the code wins, and this doc should be updated.
 
 Related docs:
 
 - [`frontend-doc.md`](frontend-doc.md): the frontend and the data shapes it expects.
 - [`apis-usage.md`](apis-usage.md): exactly what is called on each external API and how it's used.
-- [`human-review.md`](human-review.md): decisions that still need human review, including the scoring rules.
+- [`wildfire-model.md`](wildfire-model.md): the wildfire model, its weekly AWS pipeline and how to operate it.
 - [`backend/README.md`](../backend/README.md): a shorter version of this doc for setting up the backend.
 
 ## 1. Summary
 
-A FastAPI service that combines public hazard data into risk scores, and returns them in the shapes defined by [`frontend/lib/types.ts`](../frontend/lib/types.ts). It's built for a hackathon-style demo: there's no authentication and no automated tests.
+A FastAPI service that combines public hazard data into risk scores, and returns them in the shapes defined by [`frontend/lib/types.ts`](../frontend/lib/types.ts). It's public and read-only: there's no authentication, and there are no automated tests. It runs on Railway, and the frontend on Vercel ([Deploying](#deploying)).
 
 Four things shape the design:
 
-- **Two kinds of data.** Slow-changing reference data (counties, populations, hazard history and FEMA's expected losses) lives in a **Supabase Postgres database**. It's seeded once and read into memory at startup. Live data is fetched when needed and cached in memory.
-- **Requests never touch the database.** The API reads about 45k small rows once at startup. Every request is served from memory, so database latency (the Supabase project is in US East) only affects startup.
+- **Two kinds of data.** Slow-changing reference data (counties, populations, hazard history and FEMA's expected losses) lives in a **Supabase Postgres database**. It's read into memory at startup and rebuilt automatically once a month. Live data is fetched when needed and cached in memory.
+- **Requests never touch the database.** The API reads about 45k small rows at startup. Every request is served from memory, so database latency (the Supabase project is in US East) only affects startup. The only later reads are the monthly refresh and, during NWS outages, the alert archive.
 - **Quotas are shared.** All site visitors share this backend's upstream limits, so everything is cached, and per-county APIs are only called when someone opens that county.
 - **Upstream failures don't break the site.** If a source is down, the API still returns baseline scores and says that live data is unavailable. It never reports "no alerts" when it couldn't check.
 
@@ -105,19 +105,22 @@ All settings are defined in [`app/config.py`](../backend/app/config.py) and can 
 ```
 backend/
   README.md                      Setup and architecture, for new developers
-  requirements.txt
+  requirements.txt               The API's dependencies (all Railway installs)
+  requirements-ml.txt            Extra dependencies for training and running the wildfire model locally
   env.example
   db/schema.sql                  The whole database schema; safe to re-run
+  db/migrations/                 One-off SQL for databases created before a schema change
   data/reference.json            Snapshot that seeds the database; generated, committed, 2.0 MB
   data/wildfire_model.json       Local default for WILDFIRE_MODEL_URI, written by predict_week; git-ignored (production reads S3)
   data/snapshot/                 Fixed state scores for the home page's map animation, served by GET /api/home-snapshot
   weekly_scores/                 Stdlib-only hand-off between the weekly job and the API: document format and stores (file, S3)
-  ml/wildfire/                   The wildfire model: training, artifacts, predict_week.py and the AWS handler.py (needs requirements-ml.txt)
+  ml/wildfire/                   The wildfire model: training, artifacts and predict_week.py (see wildfire-model.md)
   aws/
     lambda_function.py           NWS alert archive Lambda (zip, needs only psycopg)
     wildfire_steps.py            Weekly wildfire pipeline Lambdas: fetch_chunk, build_features, calibrate_and_publish
     wildfire.Dockerfile          Container image for wildfire_steps.py (with requirements-pipeline.txt)
-    wildfire_state_machine.json  Step Functions definition for the weekly pipeline (placeholders to fill)
+    wildfire_state_machine.json  Step Functions definition for the weekly pipeline
+    requirements-pipeline.txt    The pipeline image's dependencies
   scripts/
     init_db.py                   CLI: initialize, reseed or refresh the database
     build_reference_data.py      Fetches FEMA, USGS, Census and NRI; computes the reference data
@@ -132,6 +135,7 @@ backend/
       reference.py               Loads reference data from the DB into memory
       snapshot.py                National scores from the nationwide feeds and the wildfire model
       wildfire_model.py          Reads the weekly wildfire model file; re-reads it when it changes
+      alert_archive.py           Reads the Lambda's NWS alert archive, only during NWS outages
       reference_refresh.py       Rebuilds and reseeds the reference data once it's REFERENCE_MAX_AGE_DAYS old
       home_snapshot.py           Fixed state scores for the home page animation (data/snapshot/)
       risk.py                    Builds StateRecord, CountyRecord and MapValue
@@ -156,8 +160,9 @@ Dependencies point one way: `routers` call `services`, which call `clients` and 
 
 1. `db.initialize` creates missing tables and seeds if needed ([section 2](#first-start-and-seeding)).
 2. `ReferenceData.from_database` reads the reference tables into memory. If they're still empty, it raises `ReferenceNotSeededError`.
-3. The HTTP client, TTL cache, upstream clients and the two services are created and stored on `app.state`. Routes get them through `dependencies.py`.
-4. A background task builds the first national snapshot, so the first visitor doesn't wait.
+3. `load_home_snapshot` reads the home page's fixed scores from `data/snapshot/`.
+4. The HTTP client, TTL cache, upstream clients, the wildfire model source and the two services are created and stored on `app.state`. Routes get them through `dependencies.py`.
+5. Two background tasks start: `ReferenceRefresher`, which checks the reference data's age every hour from a minute after startup, and the first national snapshot build, so the first visitor doesn't wait.
 
 ### Request flow
 
@@ -183,7 +188,7 @@ All are `GET`, under `/api`. JSON field names are camelCase.
 | `/api/counties/{fips}` | `CountyRecord`, with `expectedLoss` unless NRI has no county data | 404 unknown FIPS, 422 not five digits |
 | `/api/map-values?level=&metric=&hazard=` | `MapValue[]` | 400 unsupported combination, 422 invalid value |
 | `/api/search?q=&limit=` | `SearchResult[]`. Empty when nothing matches | 422 missing `q` |
-| `/api/health` | Status of each source | None |
+| `/api/health` | Each source's cache state, the wildfire model file (`sources.wildfireModel`), the alert archive when in use, and the reference data's age (`referenceData`) | None |
 | `/api/home-snapshot` | `HomeSnapshot`: fixed state scores per hazard for the home page animation, each with `kind` (`week` or `day`) and `asOf`. Loaded at startup from the newest `wildfire-*-snapshot.json` (a weekly scores document, scored by state like the live snapshot) and `hazards-*-snapshot.json` in `data/snapshot/` | 503 if neither file could be read |
 
 ### `/api/map-values` parameters
@@ -265,6 +270,7 @@ Scores, tiers and warnings depend on live conditions, so they vary. The Wildfire
 - Dollar amounts are raw numbers, in dollars per year. The frontend formats them.
 - `hazards` is always present and sorted highest first. `expectedLoss.byHazard` is sorted largest first.
 - `activeAlert` and `primaryAlert` are omitted when there are no alerts, and hold the "unavailable" text below during an NWS outage, when `activeAlertCount` is also omitted.
+- `alerts` lists every active alert, most important first, for the side panels' alert dropdown. A county's are alert headlines; a state's are alert types with county counts, such as `"Flood Advisory in 4 counties"`. It's omitted when there are none, and during an NWS outage.
 - Fields that are `None` in states and counties are omitted (`response_model_exclude_none`), for example `socialVulnerability` when NRI has no rating.
 - County names include their suffix (`"Orleans Parish"`), and `state` is the full name.
 - FIPS codes are strings with leading zeros.
@@ -273,7 +279,7 @@ Scores, tiers and warnings depend on live conditions, so they vary. The Wildfire
 
 All of this is in [`app/domain/scoring.py`](../backend/app/domain/scoring.py) and [`app/domain/hazards.py`](../backend/app/domain/hazards.py).
 
-**These are decisions made for the demo, not validated risk science.** [`human-review.md`](human-review.md) lists each one with alternatives.
+**These weights and thresholds are design choices, not validated risk science.** The site's /about page explains them to users, so update it when you change one.
 
 ### Overall score
 
@@ -346,23 +352,11 @@ A plain average would let hazards that don't apply to a place hide the one that 
 
 ### Wildfire model (0 to 100)
 
-The XGBoost model in [`ml/wildfire/`](../backend/ml/wildfire/README.md) estimates, per county, the calibrated probability that a large wildfire (MTBS: about 1,000+ acres in the West, 500+ in the East) starts that week. The API doesn't run it: it needs xgboost, pandas and 180 days of NASA POWER weather per grid cell. Instead, a weekly job writes one JSON file:
+The XGBoost model in [`ml/wildfire/`](../backend/ml/wildfire/README.md) estimates, per county, the calibrated probability that a large wildfire (MTBS: about 1,000+ acres in the West, 500+ in the East) starts that week. **The API doesn't run it.** Every Monday at 06:00 UTC, an AWS Step Functions pipeline downloads the weather, runs the model and publishes one JSON file to `s3://riskresource-data-bucket/wildfire/latest.json`. The API reads it from `WILDFIRE_MODEL_URI`, as a dedicated IAM user with read-only access to the bucket's `wildfire/` prefix. [`wildfire-model.md`](wildfire-model.md) covers the model, the pipeline and how to operate it.
 
-```bash
-# From backend/, with requirements-ml.txt installed. About 30 minutes, mostly NASA POWER downloads.
-python -m ml.wildfire.predict_week
-```
+The job and the API share only [`weekly_scores/`](../backend/weekly_scores/__init__.py): the file format (`contract.py`) and where it's stored (`store.py`, a local path or `s3://`). To score a week locally instead, run `python -m ml.wildfire.predict_week` from `backend/` with `requirements-ml.txt` installed (about 30 minutes) and leave `WILDFIRE_MODEL_URI` unset.
 
-`services/wildfire_model.py` checks the document's version (a file's mtime, an S3 object's ETag) whenever the snapshot is rebuilt (every minute), in a worker thread, so a new week is picked up without a restart. If a check fails, the last good week is kept until it goes stale. `/api/health` reports it under `sources.wildfireModel`, including its location.
-
-**Moving the job to AWS.** The job and the API only share [`weekly_scores/`](../backend/weekly_scores/__init__.py): the document format (`contract.py`) and where it's stored (`store.py`). To migrate:
-
-1. Run the job on a weekly schedule with `WILDFIRE_MODEL_URI=s3://<bucket>/<key>`. The planned setup is a Step Functions state machine ([`aws/wildfire_state_machine.json`](../backend/aws/wildfire_state_machine.json)) that runs three Lambdas from [`aws/wildfire_steps.py`](../backend/aws/wildfire_steps.py): download the weather in 8 chunks, build the features, then run the model and publish. It's split because the whole job takes about 30 minutes, over Lambda's 15. There's no SageMaker: the model takes under a second. Alternatively, [`ml/wildfire/handler.py`](../backend/ml/wildfire/handler.py) runs the job in one go on a container service with no time limit, such as Fargate.
-2. Set the API's `WILDFIRE_MODEL_URI` to the same `s3://` URI, and give the API `s3:GetObject` on that key. `boto3` is already in `requirements.txt` for this.
-
-No scoring code changes. To store it somewhere else, such as Supabase, add a store class with `version`, `read`, `write` and `describe`.
-
-The script uses observed NASA POWER weather for the days before the week, and fills in the days POWER doesn't have yet from the Open-Meteo forecast. Counties with no weather for the week are left out of the file.
+`services/wildfire_model.py` checks the file's version (a local file's mtime, an S3 object's ETag) whenever the snapshot is rebuilt (every minute), in a worker thread, so a new week is picked up without a restart. If a check fails, the last good week is kept until it goes stale. `/api/health` reports it under `sources.wildfireModel`, including its location.
 
 Probabilities are small (a typical county-week is well under 1%), so `wildfire_model_score` scores them on a log scale, clamped at both ends:
 
@@ -384,7 +378,7 @@ The 10% ceiling also keeps the calibrator's top step, which reaches 100% from on
 | Moderate | 30 to 49 |
 | Low | Below 30 |
 
-The backend assigns tiers. The map's colour bands are different: see [frontend-doc.md](frontend-doc.md#colours-and-legends).
+The backend assigns tiers, and `frontend/lib/riskColors.ts` mirrors the cutoffs (`TIER_FLOORS`) to colour them; change both together. The map splits Low and Moderate into two shades each, but never crosses a tier boundary: see [frontend-doc.md](frontend-doc.md#colours-and-legends).
 
 ### States
 
@@ -549,9 +543,11 @@ County IDs come from the same GeoJSON file the frontend draws, so every `MapValu
 | Which FEMA incidents count | `FEMA_INCIDENT_HAZARDS` in `domain/hazards.py`, then `init_db --refresh` |
 | Which NRI hazards count toward losses | `NRI_HAZARDS` and `NRI_EXCLUDED_HAZARDS` in `domain/hazards.py`, then `init_db --refresh`. Also update `frontend/lib/nri.ts` |
 | The high-loss cutoff | `HIGH_LOSS_PERCENTILE` in `scripts/build_reference_data.py`, then `init_db --refresh`. Also update the "top 20%" wording in the frontend |
-| Tier cutoffs, weights or thresholds | `domain/scoring.py` |
+| Tier cutoffs | `TIER_FLOORS` in `domain/scoring.py` and in `frontend/lib/riskColors.ts`, together |
+| Weights or thresholds | `domain/scoring.py` |
 | The 40/40/20 overall split, or the model's log scale | `OVERALL_*_WEIGHT` and `MODEL_PROBABILITY_*` in `domain/scoring.py`. Also update `frontend/lib/scoring.ts` and the /about text |
-| This week's wildfire model scores | Run `python -m ml.wildfire.predict_week` (weekly) |
+| This week's wildfire model scores | Nothing: the AWS pipeline publishes them every Monday. To rerun a week, see [`wildfire-model.md`](wildfire-model.md#10-checking-on-it) |
+| How often reference data refreshes | `REFERENCE_MAX_AGE_DAYS` in `app/config.py` or the Railway variables |
 | Cache lifetimes, CORS origins, User-Agent | `app/config.py` or `backend/.env` |
 | A response field | `app/schemas.py` and `frontend/lib/types.ts`, together |
 
@@ -561,7 +557,7 @@ County IDs come from the same GeoJSON file the frontend draws, so every `MapValu
 
 ## 10. Known limitations
 
-- **The wildfire model runs on forecast weather.** It was trained on NASA POWER reanalysis, and this week's days come from Open-Meteo's forecast, which has different biases (especially wind and humidity). The scores haven't been validated against forecast inputs yet. Above about 0.3% it also overestimated by about a quarter in 2021-2024 (see the model README).
+- **The wildfire model runs on forecast weather.** It was trained on NASA POWER reanalysis, and this week's days come from Open-Meteo's forecast, which has different biases (especially wind and humidity). The scores haven't been validated against forecast inputs yet. Above about 0.3% it also overestimated by about a quarter in 2021-2024 (see [`wildfire-model.md`](wildfire-model.md#12-known-limitations)).
 - **If the weekly model run fails,** the file goes stale after `WILDFIRE_MODEL_MAX_AGE_DAYS` and the overall score quietly drops back to the hazard composite. `/api/health` shows `wildfireModel.available: false` when that happens. The run is scheduled on AWS every Monday (`aws/wildfire_state_machine.json`).
 - **Baseline is a proxy.** Declarations measure federal response rather than physical risk, and they depend on how FEMA labels events: many tornadoes are filed under "Severe Storm". The NRI losses are a better long-term measure, but they're shown separately and don't feed the score.
 - **Expected loss is modeled and partial.** It leaves out 7 NRI hazards, including heat and drought, and includes a dollar value for deaths and injuries.
@@ -571,8 +567,8 @@ County IDs come from the same GeoJSON file the frontend draws, so every `MapValu
 - **Tribal lands.** FEMA declarations for tribal areas have no county, so they count toward the state's declaration total but not toward any county's baseline.
 - **River flooding hasn't been seen live.** Live NWPS responses were parsed without errors, but none showed a gauge above flood stage. That branch was only tested with sample data.
 - **The cache is per-process.** Running several workers multiplies upstream calls.
-- **The database is a single point of failure at startup.** If Supabase is paused (free projects pause after about a week of inactivity) or unreachable, the API won't start. Open the Supabase dashboard and restore the project before a demo.
-- **Informational only.** This isn't a substitute for official warnings. The repo README says so, but the site itself doesn't show a disclaimer yet (see [`human-review.md`](human-review.md)).
+- **The database is a single point of failure at startup.** If Supabase is paused (free projects pause after about a week of inactivity) or unreachable, the API won't start. The alert archive Lambda writes to it every 15 minutes, which should keep it active; if it's ever paused, restore it from the Supabase dashboard.
+- **Informational only.** This isn't a substitute for official warnings. The site's footer and the repo README both say so.
 
 ## 11. How the frontend connects
 
@@ -583,23 +579,31 @@ The browser calls this API directly, through [`frontend/lib/api.ts`](../frontend
 
 ### Deploying
 
-At this snapshot the frontend has been deployed but the backend hasn't, so the deployed site can't load any data. It falls back to `http://localhost:8000/api`, which each visitor's browser looks for on their own machine.
+| Part | Host |
+|---|---|
+| Frontend | Vercel, redeployed automatically on every push to `main` |
+| Backend API | Railway, as a long-running web service, redeployed automatically on every push to `main` |
+| Database | Supabase (free plan, US East). The API creates and seeds its tables itself |
+| Scheduled jobs | AWS: the alert archive Lambda (`aws/lambda_function.py`) and the weekly wildfire pipeline ([`wildfire-model.md`](wildfire-model.md#7-the-weekly-aws-pipeline)). Updated via the AWS console, not on push |
 
-**Host the backend as a long-running server, not as serverless functions** such as Vercel's Python runtime. The design depends on staying up: it loads the reference data once at startup, warms the national snapshot in a background task, and caches live feeds in memory across requests. A free Render web service fits, and connects to GitHub to redeploy on every push. The repo owner is setting one up.
+**Host the backend as a long-running server, not as serverless functions** such as Vercel's Python runtime. The design depends on staying up: it loads the reference data once at startup, warms the national snapshot in a background task, refreshes reference data on a timer, and caches live feeds in memory across requests.
+
+Railway settings:
 
 | Setting | Value |
 |---|---|
 | Root directory | `backend` |
-| Build command | `pip install -r requirements.txt` |
+| Install | `pip install -r requirements.txt` (detected automatically) |
 | Start command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
 | Health check path | `/api/health` |
 | `DATABASE_URL` | The Supabase session pooler string |
 | `CORS_ORIGINS` | A JSON list with the site's origin, no trailing slash, e.g. `["https://<site>.vercel.app"]` |
-| `PYTHON_VERSION` | Pin one the dependencies build on, e.g. `3.13.1` |
+| `WILDFIRE_MODEL_URI` | `s3://riskresource-data-bucket/wildfire/latest.json` |
+| AWS credentials | The access key of the API's IAM user, which has read-only access to `s3://riskresource-data-bucket/wildfire/`. boto3 reads them from the standard `AWS_*` variables |
 
-Then on the frontend host, set `NEXT_PUBLIC_API_URL` to the backend URL **including `/api`**, and redeploy, because Next.js fixes it at build time. Both URLs must be `https`, or browsers block the calls as mixed content.
+Keep `REFERENCE_MAX_AGE_DAYS` at its default (30) here, and set it to 0 on local backends, so only the deployed API rebuilds the shared database. Railway restarts the process on every deploy; the refresh schedule survives that because the data's age is stored in the database.
 
-On a free tier that sleeps when idle (Render's does after 15 minutes), the first request after a sleep waits for the server to start and reload its data from Supabase.
+On Vercel, set `NEXT_PUBLIC_API_URL` to the Railway URL **including `/api`**, and redeploy, because Next.js fixes it at build time. Both URLs must be `https`, or browsers block the calls as mixed content.
 
 | Symptom in the browser's dev tools | Cause |
 |---|---|
@@ -621,5 +625,5 @@ On a free tier that sleeps when idle (Render's does after 15 minutes), the first
 - Avoid repeatedly calling NWPS while testing. It rate-limited us after a few dozen requests in one session.
 - `init_db --refresh` and `--reseed` write to the shared Supabase database that the whole team uses.
 - Give every new function a docstring in the existing format.
-- Update this doc, `backend/README.md` and `apis-usage.md` when you change endpoints, sources, tables or scoring. For scoring weights, also update `frontend/lib/scoring.ts` and the /about page.
+- Update this doc, `backend/README.md` and `apis-usage.md` when you change endpoints, sources, tables or scoring. For scoring weights, also update `frontend/lib/scoring.ts` and the /about page. For the wildfire model or its pipeline, update `wildfire-model.md`.
 - Don't import `ml/` from `app/`, or `app/` from `ml/`. The API must run on `requirements.txt` alone, and the job must run without FastAPI. They meet only in `weekly_scores/`, which stays standard-library only (boto3 imported lazily).

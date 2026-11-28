@@ -1,4 +1,4 @@
-"""National Weather Service: active alerts. See claude-docs/apis-usage.md."""
+"""National Weather Service: active alerts. See docs/apis-usage.md."""
 
 from dataclasses import dataclass
 

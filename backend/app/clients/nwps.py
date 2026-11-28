@@ -1,4 +1,4 @@
-"""NOAA National Water Prediction Service: river gauges. See claude-docs/apis-usage.md."""
+"""NOAA National Water Prediction Service: river gauges. See docs/apis-usage.md."""
 
 import time
 from dataclasses import dataclass
