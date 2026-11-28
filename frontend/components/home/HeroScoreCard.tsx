@@ -4,8 +4,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { fetchCounty, searchCounties } from '@/lib/api';
-import { HAZARD_COLORS } from '@/lib/riskColors';
-import { SCORE_WEIGHTS } from '@/lib/scoring';
+import { scoreColor } from '@/lib/riskColors';
 import { CountyRecord, SearchResult } from '@/lib/types';
 
 interface SavedLocation {
@@ -186,7 +185,7 @@ export default function HeroScoreCard() {
 
   const deleteLocation = (e: React.MouseEvent, idToDelete: string) => {
     e.stopPropagation();
-    if (locations.length <= 1) return; // Always keep at least one pill
+    if (locations.length <= 1) return;
 
     const nextList = locations.filter((item) => item.id !== idToDelete);
     setLocations(nextList);
@@ -315,7 +314,7 @@ export default function HeroScoreCard() {
     hazards: (county?.hazards ?? []).map((h) => ({
       name: h.name,
       score: h.score,
-      color: HAZARD_COLORS[h.name] ?? '#9ca3af',
+      color: scoreColor(h.score),
     })),
   };
 
@@ -493,7 +492,7 @@ export default function HeroScoreCard() {
               d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
             />
             <path
-              className="text-amber-600 dark:text-[#e29b4d]"
+              style={{ color: scoreColor(data.score) }}
               strokeDasharray={`${data.score}, 100`}
               strokeWidth="3.2"
               strokeLinecap="round"
@@ -547,7 +546,7 @@ export default function HeroScoreCard() {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-5 border-t border-[#e5e0d5] dark:border-white/10">
+      <div className="flex items-center justify-end pt-5 border-t border-[#e5e0d5] dark:border-white/10">
         <Link
           href={`/map?fips=${activePill.fips}`}
           className="text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium hover:underline"
