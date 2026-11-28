@@ -64,10 +64,16 @@ function FocusOn({
     if (!feature) return;
 
     const targetBounds = boundsOf(feature);
-    // Avoid re-playing the zoom animation if already zoomed in and target is in view
+    // The zoom flyToBounds would end at, given the same padding and cap as below
+    const targetZoom = Math.min(
+      map.getBoundsZoom(targetBounds, false, L.point(48, 48)),
+      FOCUS_MAX_ZOOM[focus.type]
+    );
+    // Avoid re-playing the zoom animation if already zoomed in to about the target's
+    // level with it in view. Being zoomed to its state isn't enough for a county.
     if (
       focused.current &&
-      map.getZoom() >= 6 &&
+      map.getZoom() >= targetZoom - 0.5 &&
       map.getBounds().pad(-0.15).contains(targetBounds.getCenter())
     ) {
       return;

@@ -260,7 +260,7 @@ export default function RiskMapPage() {
           onMeasureChange={setMeasure}
           hazard={activeHazard}
           onHazardChange={setHazard}
-          onSelectCounty={(fips) => loadCounty(fips, startRequest())}
+          onSelectCounty={(fips) => loadCounty(fips, startRequest(), true)}
         />
 
         {mapError && (
