@@ -218,8 +218,8 @@ export default function RiskMapPage() {
       : quantileBands(Object.values(currentValues ?? {}).map((v) => v.value), format);
   const legend = {
     score: {
-      title: `Risk score (0–100)${hazardSuffix}`,
-      note: activeHazard ? undefined : SCORE_FORMULA,
+      title: ``,
+      note: undefined,
     },
     lossPerPerson: {
       title: `Expected annual loss per person${hazardSuffix}`,
