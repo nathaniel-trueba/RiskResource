@@ -222,16 +222,16 @@ export default function RiskMapPage() {
       note: undefined,
     },
     lossPerPerson: {
-      title: `Expected annual loss per person${hazardSuffix}`,
-      note: 'FEMA NRI estimate, $ per resident per year. 11 of 18 NRI hazards.',
+      title: ``,
+      note: '',
     },
     totalLoss: {
-      title: `Total expected annual loss${hazardSuffix}`,
-      note: 'FEMA NRI estimate, $ per year. 11 of 18 NRI hazards.',
+      title: ``,
+      note: '',
     },
     highLossPct: {
-      title: '% of residents in high-loss counties',
-      note: 'High-loss: top 20% of counties nationally for FEMA expected loss per person.',
+      title: '',
+      note: '',
     },
   }[measure];
   const describe = (value: MapValue) => {

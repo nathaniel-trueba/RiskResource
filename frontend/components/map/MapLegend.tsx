@@ -18,15 +18,25 @@ interface GroupedRow {
   colors: string[];
   name: string;
   range: string;
-  sortValue: number;
 }
 
 /**
- * Groups bands sharing a tier prefix (e.g., "Moderate 40-49" & "Moderate 30-39")
- * into a single row with paired swatches, ordered highest-to-lowest (Critical on top, Low at bottom).
+ * Groups score bands sharing a tier prefix (e.g., "Moderate 40-49" & "Moderate 30-39")
+ * into a single row with paired swatches ordered Critical -> Low.
+ * For quantile bands (e.g., "$137 - $287" ... "$524 +"), reverses lowest-to-highest
+ * so the darkest/highest band ("$524 +") is always on top.
  */
 function groupBands(bands: LegendBand[]): GroupedRow[] {
-  // Sort highest-to-lowest first so Critical (75-100) is always first and Low (0-14) is last
+  const isScoreLegend = bands.some((b) => /^[A-Za-z]+\s+\d+\s*[-–]\s*\d+$/.test(b.label));
+
+  if (!isScoreLegend) {
+    return [...bands].reverse().map((band) => ({
+      colors: [band.color],
+      name: band.label,
+      range: '',
+    }));
+  }
+
   const sorted = [...bands].sort((a, b) => {
     const aNums = a.label.match(/\d+/g)?.map(Number) ?? [0];
     const bNums = b.label.match(/\d+/g)?.map(Number) ?? [0];
@@ -36,17 +46,10 @@ function groupBands(bands: LegendBand[]): GroupedRow[] {
   const rows: GroupedRow[] = [];
 
   for (const band of sorted) {
-    // Match labels like "Critical 75-100", "Moderate 40-49", "Low 0-14"
     const match = band.label.match(/^([A-Za-z]+)\s+(\d+)\s*[-–]\s*(\d+)$/);
 
     if (!match) {
-      const nums = band.label.match(/\d+/g)?.map(Number) ?? [0];
-      rows.push({
-        colors: [band.color],
-        name: band.label,
-        range: '',
-        sortValue: Math.max(...nums),
-      });
+      rows.push({ colors: [band.color], name: band.label, range: '' });
       continue;
     }
 
@@ -54,7 +57,6 @@ function groupBands(bands: LegendBand[]): GroupedRow[] {
     const prev = rows[rows.length - 1];
 
     if (prev && prev.name === tierName && prev.range) {
-      // prev holds the higher sub-band; merge current lower bound into it
       const upper = prev.range.split(/[-–]/)[1];
       prev.colors.push(band.color);
       prev.range = `${minStr}-${upper}`;
@@ -63,7 +65,6 @@ function groupBands(bands: LegendBand[]): GroupedRow[] {
         colors: [band.color],
         name: tierName,
         range: `${minStr}-${maxStr}`,
-        sortValue: Number(maxStr),
       });
     }
   }
