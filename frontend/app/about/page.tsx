@@ -322,7 +322,6 @@ export default function AboutDataPage() {
                   FEMA&apos;s National Risk Index estimates the average annual financial impact of
                   disasters across three areas: damage to buildings, losses to crops, and the dollar
                   value of injuries and lives lost.
-                  These are estimates, not observed losses, and do not change with live conditions.
                 </p>
               </div>
             </div>
