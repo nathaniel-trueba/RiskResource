@@ -154,12 +154,13 @@ Three values are derived rather than stored:
 |---|---|---|
 | Open `/map`, switch view, change "Show", or pick a hazard | `GET /map-values?level=&metric=&hazard=` (unless cached) | Recolours the map and legend |
 | Open `/map`, or click a state | `GET /states/{code}` | `StateInspector`, and the state's loss panel under the map |
-| Click a county, or a county search result | `GET /counties/{fips}`, plus `GET /states/{code}` if the state changed | `CountyInspector` and the county's loss panel. The map doesn't move |
+| Click a county | `GET /counties/{fips}`, plus `GET /states/{code}` if the state changed | `CountyInspector` and the county's loss panel. The map doesn't move |
+| Pick a county in the map search | Same as clicking a county | Same, and the map zooms to the county |
 | Click an empty part of the map | None | Clears the selection and zooms out |
 | Click "Zoom Into Counties" | None | County layer, zoomed to the state |
 | Click the States toggle, the Counties toggle, or "Back to <state>" | None (map values may load) | Zooms back to the national view |
 | Type in the map search | `GET /search?q=&limit=8` and Photon, 250 ms after the last keystroke | County and address results |
-| Pick an address in the map search | FCC Census Area API, then `GET /counties/{fips}` | Opens that county |
+| Pick an address in the map search | FCC Census Area API, then `GET /counties/{fips}` | Opens that county and zooms to it |
 | Open `/` | `GET /home-snapshot` | `HazardMapShowcase` |
 | Open `/` | `GET /counties/{fips}` for the selected saved location (Santa Rosa, `06097`, by default) | `HeroScoreCard`. Other locations fetch on click, once each |
 | Search on `/` | Photon as you type; FCC (and Nominatim on Enter) when submitted | Navigates to `/map` |
@@ -339,7 +340,7 @@ interface Props {
 
 `RiskLeafletMap` exports `MapFocus` (`{ type: 'state' | 'county', id }`, where `id` is a postal code or FIPS). A `FocusOn` child component reads the map with react-leaflet's `useMap` and:
 
-- **Focus set:** flies to the area's bounds, at most zoom 7 for a state and 8 for a county, so a small county still shows its surroundings.
+- **Focus set:** flies to the area's bounds, at most zoom 7 for a state and 8 for a county, so a small county still shows its surroundings. It skips the flight only when the map is already at about that zoom with the area in view, so a county inside the state you're zoomed to still zooms in.
 - **Focus cleared:** flies back to the national view (`DEFAULT_CENTER`, `DEFAULT_ZOOM`), but only after a zoom-in, so the first load doesn't animate.
 - **Boundaries still loading:** waits, and zooms once the GeoJSON arrives. A search can resolve before the 3.2 MB counties file does.
 
@@ -350,9 +351,9 @@ What sets the focus is in `app/map/page.tsx`:
 | Trigger | Focus |
 |---|---|
 | "Zoom Into Counties" | The selected state |
-| First load with `?fips=` or `?q=` (`loadCounty(..., zoom = true)`) | The county |
+| First load with `?fips=`, `?lat=&lng=` or `?q=`, or picking a map search result (`loadCounty(..., zoom = true)`) | The county |
 | States toggle, Counties toggle, county panel "Back" (`showAllStates`), clicking the map background (`handleClearSelection`) | `null` |
-| Clicking an area, or a map search result | Unchanged |
+| Clicking an area on the map | Unchanged |
 
 Other things to know:
 
@@ -383,7 +384,7 @@ There's no retry button anywhere: reload the page.
 - **Dark mode is partial.** The map page's controls, legend, side panels and loss panel have no `dark:` styles, so they stay light in dark mode.
 - **The home showcase's fallback colours are hard-coded.** When the backend is down it shows fixed regional colours with no "unavailable" label. It also shows 5 hazards, leaving out Severe Storm.
 - **DC and Puerto Rico** have no state polygons, so they're only reachable through the county view or search. The API does return them at state level.
-- **Map search results don't zoom.** Only "Zoom Into Counties" and arriving from the home page do. Addresses open their county but don't drop a pin at the address.
+- **Addresses don't get a pin.** Picking an address zooms to its county but doesn't mark the address itself.
 - **Map search can't tell a backend outage from no results.**
 - **Address search depends on three free third-party services** (Photon, FCC, Nominatim) with no key, SLA or error reporting. Nominatim's usage policy asks for no more than one request a second and an identifying User-Agent, which a browser can't set.
 - **Unused code and dependencies:** `lucide-react` is unused, `@types/leaflet` is in `dependencies` rather than `devDependencies`, and `StateRecord.row`/`col` are never sent.
