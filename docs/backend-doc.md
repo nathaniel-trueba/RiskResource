@@ -189,7 +189,7 @@ All are `GET`, under `/api`. JSON field names are camelCase.
 | `/api/map-values?level=&metric=&hazard=` | `MapValue[]` | 400 unsupported combination, 422 invalid value |
 | `/api/search?q=&limit=` | `SearchResult[]`. Empty when nothing matches | 422 missing `q` |
 | `/api/health` | Each source's cache state, the wildfire model file (`sources.wildfireModel`), the alert archive when in use, and the reference data's age (`referenceData`) | None |
-| `/api/home-snapshot` | `HomeSnapshot`: fixed state scores per hazard for the home page animation, each with `kind` (`week` or `day`) and `asOf`. Loaded at startup from the newest `wildfire-*-snapshot.json` (a weekly scores document, scored by state like the live snapshot) and `hazards-*-snapshot.json` in `data/snapshot/` | 503 if neither file could be read |
+| `/api/home-snapshot` | `HomeSnapshot`: fixed state scores per hazard for the home page animation, each with `kind` and `asOf`. Loaded at startup from the newest `hazards-*-snapshot.json` in `data/snapshot/`: state hazard scores saved from `/api/map-values?level=state&metric=<hazard>`, so they match the risk map with that hazard selected (Wildfire is the hazard score, without the model) | 503 if the file couldn't be read |
 
 ### `/api/map-values` parameters
 

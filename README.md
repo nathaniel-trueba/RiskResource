@@ -8,7 +8,7 @@ Risk Resource is a website that scores every US state and county for six natural
 
 **Home page (`/`)**
 - Search for any US street address, city, ZIP code or county to jump straight to its county on the risk map.
-- An animated US map that cycles through five hazards, coloring each state by its score.
+- An animated US map that cycles through all six hazards, coloring each state by its score.
 - A live score card for a list of saved places. You can add your own (by address, city, ZIP or county) or remove them, and the list is remembered in your browser.
 
 **Risk map (`/map`)**

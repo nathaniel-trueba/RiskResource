@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             return ReferenceData.from_database(conn)
 
     reference = await asyncio.to_thread(load_reference)
-    app.state.home_snapshot = load_home_snapshot(BACKEND_DIR / settings.home_snapshot_dir, reference)
+    app.state.home_snapshot = load_home_snapshot(BACKEND_DIR / settings.home_snapshot_dir)
     cache = TTLCache(settings.max_stale_seconds, settings.failure_cooldown_seconds)
 
     async with httpx.AsyncClient(
@@ -94,9 +94,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             """
             app.state.risk_service.replace_reference(new_reference)
             app.state.search_service.replace_reference(new_reference)
-            app.state.home_snapshot = load_home_snapshot(
-                BACKEND_DIR / settings.home_snapshot_dir, new_reference
-            )
 
         app.state.reference_refresher = ReferenceRefresher(settings, install_reference, reference)
         refresher = asyncio.create_task(app.state.reference_refresher.run_forever())

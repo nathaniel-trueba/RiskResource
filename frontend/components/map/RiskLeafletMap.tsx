@@ -7,6 +7,7 @@ import L from 'leaflet';
 import type { Feature, FeatureCollection, Position } from 'geojson';
 import 'leaflet/dist/leaflet.css';
 import { MapValue } from '@/lib/types';
+import { MAP_FILL_OPACITY } from '@/lib/riskColors';
 
 const DEFAULT_CENTER: [number, number] = [45.0, -100.0];
 const DEFAULT_ZOOM = 3.5;
@@ -200,7 +201,7 @@ export default function RiskLeafletMap({
                 weight: isSelected ? 2.6 : 1.2,
                 opacity: 1,
                 color: isSelected ? '#000000' : '#2d3748',
-                fillOpacity: isSelected ? 0.85 : 0.7,
+                fillOpacity: isSelected ? 0.85 : MAP_FILL_OPACITY,
               };
             }}
             onEachFeature={(feature, layer) => {
@@ -219,7 +220,7 @@ export default function RiskLeafletMap({
                   e.target.setStyle({
                     weight: isSelected ? 2.6 : 1.2,
                     color: isSelected ? '#000000' : '#2d3748',
-                    fillOpacity: isSelected ? 0.85 : 0.7,
+                    fillOpacity: isSelected ? 0.85 : MAP_FILL_OPACITY,
                   }),
               });
             }}

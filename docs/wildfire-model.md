@@ -194,7 +194,7 @@ It holds probabilities, not scores, so the scoring rule can change in the API wi
 
 The API reads it through `weekly_scores/store.py`, which handles both local paths and `s3://` URIs. It checks the file's version (a local file's modified time, an S3 object's ETag) at every snapshot rebuild, once a minute, so a new week appears without a restart. On Railway, the API reads it as a dedicated IAM user with read-only access to the bucket's `wildfire/` prefix.
 
-The home page's animated map uses a fixed copy instead: `backend/data/snapshot/wildfire-<week>-snapshot.json`, in the same format, so its colors don't change from week to week.
+The home page's animated map doesn't use the model: its Wildfire frame shows the wildfire hazard score, like the risk map's Wildfire filter (see `backend/data/snapshot/`).
 
 ## 9. Running it locally
 
