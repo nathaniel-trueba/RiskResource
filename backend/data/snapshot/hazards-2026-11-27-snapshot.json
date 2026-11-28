@@ -841,6 +841,426 @@
     "id": "PR",
     "value": 0.0
    }
+  ],
+  "wildfire": [
+   {
+    "id": "AL",
+    "value": 0.0
+   },
+   {
+    "id": "AK",
+    "value": 11.0
+   },
+   {
+    "id": "AZ",
+    "value": 36.0
+   },
+   {
+    "id": "AR",
+    "value": 0.0
+   },
+   {
+    "id": "CA",
+    "value": 36.0
+   },
+   {
+    "id": "CO",
+    "value": 21.0
+   },
+   {
+    "id": "CT",
+    "value": 3.0
+   },
+   {
+    "id": "DE",
+    "value": 0.0
+   },
+   {
+    "id": "DC",
+    "value": 0.0
+   },
+   {
+    "id": "FL",
+    "value": 4.0
+   },
+   {
+    "id": "GA",
+    "value": 0.0
+   },
+   {
+    "id": "HI",
+    "value": 23.0
+   },
+   {
+    "id": "ID",
+    "value": 4.0
+   },
+   {
+    "id": "IL",
+    "value": 0.0
+   },
+   {
+    "id": "IN",
+    "value": 0.0
+   },
+   {
+    "id": "IA",
+    "value": 0.0
+   },
+   {
+    "id": "KS",
+    "value": 1.0
+   },
+   {
+    "id": "KY",
+    "value": 0.0
+   },
+   {
+    "id": "LA",
+    "value": 0.0
+   },
+   {
+    "id": "ME",
+    "value": 0.0
+   },
+   {
+    "id": "MD",
+    "value": 0.0
+   },
+   {
+    "id": "MA",
+    "value": 0.0
+   },
+   {
+    "id": "MI",
+    "value": 0.0
+   },
+   {
+    "id": "MN",
+    "value": 0.0
+   },
+   {
+    "id": "MS",
+    "value": 0.0
+   },
+   {
+    "id": "MO",
+    "value": 0.0
+   },
+   {
+    "id": "MT",
+    "value": 17.0
+   },
+   {
+    "id": "NE",
+    "value": 1.0
+   },
+   {
+    "id": "NV",
+    "value": 21.0
+   },
+   {
+    "id": "NH",
+    "value": 0.0
+   },
+   {
+    "id": "NJ",
+    "value": 1.0
+   },
+   {
+    "id": "NM",
+    "value": 18.0
+   },
+   {
+    "id": "NY",
+    "value": 0.0
+   },
+   {
+    "id": "NC",
+    "value": 1.0
+   },
+   {
+    "id": "ND",
+    "value": 1.0
+   },
+   {
+    "id": "OH",
+    "value": 0.0
+   },
+   {
+    "id": "OK",
+    "value": 41.0
+   },
+   {
+    "id": "OR",
+    "value": 27.0
+   },
+   {
+    "id": "PA",
+    "value": 0.0
+   },
+   {
+    "id": "RI",
+    "value": 1.0
+   },
+   {
+    "id": "SC",
+    "value": 3.0
+   },
+   {
+    "id": "SD",
+    "value": 3.0
+   },
+   {
+    "id": "TN",
+    "value": 1.0
+   },
+   {
+    "id": "TX",
+    "value": 33.0
+   },
+   {
+    "id": "UT",
+    "value": 23.0
+   },
+   {
+    "id": "VT",
+    "value": 0.0
+   },
+   {
+    "id": "VA",
+    "value": 0.0
+   },
+   {
+    "id": "WA",
+    "value": 13.0
+   },
+   {
+    "id": "WV",
+    "value": 0.0
+   },
+   {
+    "id": "WI",
+    "value": 0.0
+   },
+   {
+    "id": "WY",
+    "value": 10.0
+   },
+   {
+    "id": "PR",
+    "value": 0.0
+   }
+  ],
+  "severeStorm": [
+   {
+    "id": "AL",
+    "value": 29.0
+   },
+   {
+    "id": "AK",
+    "value": 20.0
+   },
+   {
+    "id": "AZ",
+    "value": 2.0
+   },
+   {
+    "id": "AR",
+    "value": 38.0
+   },
+   {
+    "id": "CA",
+    "value": 17.0
+   },
+   {
+    "id": "CO",
+    "value": 8.0
+   },
+   {
+    "id": "CT",
+    "value": 35.0
+   },
+   {
+    "id": "DE",
+    "value": 13.0
+   },
+   {
+    "id": "DC",
+    "value": 30.0
+   },
+   {
+    "id": "FL",
+    "value": 9.0
+   },
+   {
+    "id": "GA",
+    "value": 11.0
+   },
+   {
+    "id": "HI",
+    "value": 18.0
+   },
+   {
+    "id": "ID",
+    "value": 9.0
+   },
+   {
+    "id": "IL",
+    "value": 25.0
+   },
+   {
+    "id": "IN",
+    "value": 20.0
+   },
+   {
+    "id": "IA",
+    "value": 36.0
+   },
+   {
+    "id": "KS",
+    "value": 39.0
+   },
+   {
+    "id": "KY",
+    "value": 40.0
+   },
+   {
+    "id": "LA",
+    "value": 13.0
+   },
+   {
+    "id": "ME",
+    "value": 35.0
+   },
+   {
+    "id": "MD",
+    "value": 25.0
+   },
+   {
+    "id": "MA",
+    "value": 39.0
+   },
+   {
+    "id": "MI",
+    "value": 3.0
+   },
+   {
+    "id": "MN",
+    "value": 10.0
+   },
+   {
+    "id": "MS",
+    "value": 29.0
+   },
+   {
+    "id": "MO",
+    "value": 40.0
+   },
+   {
+    "id": "MT",
+    "value": 19.0
+   },
+   {
+    "id": "NE",
+    "value": 42.0
+   },
+   {
+    "id": "NV",
+    "value": 5.0
+   },
+   {
+    "id": "NH",
+    "value": 45.0
+   },
+   {
+    "id": "NJ",
+    "value": 35.0
+   },
+   {
+    "id": "NM",
+    "value": 14.0
+   },
+   {
+    "id": "NY",
+    "value": 19.0
+   },
+   {
+    "id": "NC",
+    "value": 6.0
+   },
+   {
+    "id": "ND",
+    "value": 34.0
+   },
+   {
+    "id": "OH",
+    "value": 8.0
+   },
+   {
+    "id": "OK",
+    "value": 57.0
+   },
+   {
+    "id": "OR",
+    "value": 26.0
+   },
+   {
+    "id": "PA",
+    "value": 15.0
+   },
+   {
+    "id": "RI",
+    "value": 38.0
+   },
+   {
+    "id": "SC",
+    "value": 9.0
+   },
+   {
+    "id": "SD",
+    "value": 29.0
+   },
+   {
+    "id": "TN",
+    "value": 39.0
+   },
+   {
+    "id": "TX",
+    "value": 23.0
+   },
+   {
+    "id": "UT",
+    "value": 4.0
+   },
+   {
+    "id": "VT",
+    "value": 42.0
+   },
+   {
+    "id": "VA",
+    "value": 19.0
+   },
+   {
+    "id": "WA",
+    "value": 32.0
+   },
+   {
+    "id": "WV",
+    "value": 32.0
+   },
+   {
+    "id": "WI",
+    "value": 13.0
+   },
+   {
+    "id": "WY",
+    "value": 29.0
+   },
+   {
+    "id": "PR",
+    "value": 6.0
+   }
   ]
  }
 }

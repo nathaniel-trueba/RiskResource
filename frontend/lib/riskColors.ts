@@ -64,6 +64,15 @@ export const SCORE_BANDS: Band[] = [
 
 export const NO_DATA_COLOR = '#d1d5db';
 
+/**
+ * Fill opacity of areas on the risk map (unselected). The home page's animated map
+ * uses it too, over MAP_BASE_COLOR, so the same score looks the same on both.
+ */
+export const MAP_FILL_OPACITY = 0.7;
+
+/** Near-white, like the risk map's light basemap, for maps drawn without tiles. */
+export const MAP_BASE_COLOR = '#fafaf8';
+
 /** Fill colour for a value, or the no-data grey when there's no value. */
 export function bandColor(value: number | undefined, bands: Band[]): string {
   if (value === undefined) return NO_DATA_COLOR;

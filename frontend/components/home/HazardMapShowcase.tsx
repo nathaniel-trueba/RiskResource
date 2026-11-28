@@ -3,19 +3,21 @@
 
 import React, { useState, useEffect } from 'react';
 import { fetchHomeSnapshot, MapMetric } from '@/lib/api';
-import { scoreColor } from '@/lib/riskColors';
+import { MAP_BASE_COLOR, MAP_FILL_OPACITY, NO_DATA_COLOR, scoreColor } from '@/lib/riskColors';
 import { MapValue, SnapshotLayer } from '@/lib/types';
 import { useTheme } from '@/components/common/ThemeProvider';
 import type { Feature, Geometry, Position } from 'geojson';
 
-type HazardType = 'Flood' | 'Wildfire' | 'Earthquake' | 'Hurricane' | 'Tornado';
+type HazardType = 'Flood' | 'Wildfire' | 'Earthquake' | 'Severe Storm' | 'Hurricane' | 'Tornado';
 
 interface HazardInfo {
   name: HazardType;
   color: string;
   description: string;
   metric: MapMetric;
-  fallbackStates: Record<string, string>;
+  // Rough regional scores, shown only when the backend can't be reached. Coloured
+  // with the same score bands as real scores; unlisted states count as 0.
+  fallbackStates: Record<string, number>;
 }
 
 const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
@@ -26,26 +28,26 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     description:
       'Heavy rainfall, snowmelt, and storm surge concentrate flood risk along the Gulf Coast, Florida, and the Mississippi and Ohio river basins.',
     fallbackStates: {
-      Louisiana: '#c45138',
-      Florida: '#c45138',
-      Mississippi: '#e08f52',
-      Arkansas: '#e08f52',
-      Missouri: '#e08f52',
-      Illinois: '#e08f52',
-      Texas: '#eab676',
-      Iowa: '#eab676',
-      Kentucky: '#eab676',
-      Tennessee: '#eab676',
-      Indiana: '#eab676',
-      Ohio: '#eab676',
-      'North Carolina': '#eab676',
-      'South Carolina': '#eab676',
-      Alabama: '#f1d69d',
-      Georgia: '#f1d69d',
-      Virginia: '#f1d69d',
-      'New Jersey': '#f1d69d',
-      'West Virginia': '#f1d69d',
-      California: '#f1d69d',
+      Louisiana: 60,
+      Florida: 60,
+      Mississippi: 45,
+      Arkansas: 45,
+      Missouri: 45,
+      Illinois: 45,
+      Texas: 35,
+      Iowa: 35,
+      Kentucky: 35,
+      Tennessee: 35,
+      Indiana: 35,
+      Ohio: 35,
+      'North Carolina': 35,
+      'South Carolina': 35,
+      Alabama: 20,
+      Georgia: 20,
+      Virginia: 20,
+      'New Jersey': 20,
+      'West Virginia': 20,
+      California: 20,
     },
   },
   Wildfire: {
@@ -55,20 +57,20 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     description:
       'Dry summers, dense forest fuels, and seasonal downslope winds drive severe wildfire exposure across California, the Pacific Northwest, and the Mountain West.',
     fallbackStates: {
-      California: '#c45138',
-      Oregon: '#e08f52',
-      Washington: '#e08f52',
-      Idaho: '#e08f52',
-      Arizona: '#e08f52',
-      'New Mexico': '#eab676',
-      Nevada: '#eab676',
-      Utah: '#eab676',
-      Colorado: '#eab676',
-      Montana: '#eab676',
-      Wyoming: '#f1d69d',
-      Texas: '#f1d69d',
-      Oklahoma: '#f1d69d',
-      Hawaii: '#eab676',
+      California: 60,
+      Oregon: 45,
+      Washington: 45,
+      Idaho: 45,
+      Arizona: 45,
+      'New Mexico': 35,
+      Nevada: 35,
+      Utah: 35,
+      Colorado: 35,
+      Montana: 35,
+      Wyoming: 20,
+      Texas: 20,
+      Oklahoma: 20,
+      Hawaii: 35,
     },
   },
   Earthquake: {
@@ -78,19 +80,19 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     description:
       'Tectonic plate boundaries along the West Coast, Alaska, and New Madrid fault zones account for the highest seismic hazard.',
     fallbackStates: {
-      California: '#c45138',
-      Alaska: '#c45138',
-      Washington: '#e08f52',
-      Oregon: '#e08f52',
-      Nevada: '#eab676',
-      Utah: '#eab676',
-      Hawaii: '#eab676',
-      Idaho: '#f1d69d',
-      Montana: '#f1d69d',
-      Wyoming: '#f1d69d',
-      Missouri: '#f1d69d',
-      Arkansas: '#f1d69d',
-      Tennessee: '#f1d69d',
+      California: 60,
+      Alaska: 60,
+      Washington: 45,
+      Oregon: 45,
+      Nevada: 35,
+      Utah: 35,
+      Hawaii: 35,
+      Idaho: 20,
+      Montana: 20,
+      Wyoming: 20,
+      Missouri: 20,
+      Arkansas: 20,
+      Tennessee: 20,
     },
   },
   Hurricane: {
@@ -100,20 +102,20 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     description:
       'Tropical cyclones bring destructive winds, storm surge, and inland flooding from the Texas Gulf Coast across Florida and up the Eastern Seaboard.',
     fallbackStates: {
-      Florida: '#c45138',
-      Louisiana: '#c45138',
-      Texas: '#e08f52',
-      'North Carolina': '#e08f52',
-      'South Carolina': '#e08f52',
-      Mississippi: '#eab676',
-      Alabama: '#eab676',
-      Georgia: '#eab676',
-      Virginia: '#eab676',
-      Maryland: '#f1d69d',
-      Delaware: '#f1d69d',
-      'New Jersey': '#f1d69d',
-      'New York': '#f1d69d',
-      Massachusetts: '#f1d69d',
+      Florida: 60,
+      Louisiana: 60,
+      Texas: 45,
+      'North Carolina': 45,
+      'South Carolina': 45,
+      Mississippi: 35,
+      Alabama: 35,
+      Georgia: 35,
+      Virginia: 35,
+      Maryland: 20,
+      Delaware: 20,
+      'New Jersey': 20,
+      'New York': 20,
+      Massachusetts: 20,
     },
   },
   Tornado: {
@@ -123,29 +125,56 @@ const HAZARD_CONFIG: Record<HazardType, HazardInfo> = {
     description:
       'Warm, humid Gulf air clashing with cool, dry air masses fuels frequent severe thunderstorms across the Great Plains, Midwest, and Deep South.',
     fallbackStates: {
-      Oklahoma: '#c45138',
-      Kansas: '#c45138',
-      Texas: '#c45138',
-      Mississippi: '#e08f52',
-      Alabama: '#e08f52',
-      Arkansas: '#e08f52',
-      Missouri: '#e08f52',
-      Iowa: '#e08f52',
-      Nebraska: '#e08f52',
-      Illinois: '#eab676',
-      Indiana: '#eab676',
-      Tennessee: '#eab676',
-      Louisiana: '#eab676',
-      Kentucky: '#f1d69d',
-      Georgia: '#f1d69d',
-      'South Dakota': '#f1d69d',
-      Minnesota: '#f1d69d',
-      Ohio: '#f1d69d',
+      Oklahoma: 60,
+      Kansas: 60,
+      Texas: 60,
+      Mississippi: 45,
+      Alabama: 45,
+      Arkansas: 45,
+      Missouri: 45,
+      Iowa: 45,
+      Nebraska: 45,
+      Illinois: 35,
+      Indiana: 35,
+      Tennessee: 35,
+      Louisiana: 35,
+      Kentucky: 20,
+      Georgia: 20,
+      'South Dakota': 20,
+      Minnesota: 20,
+      Ohio: 20,
+    },
+  },
+  'Severe Storm': {
+    name: 'Severe Storm',
+    metric: 'severeStorm',
+    color: '#6b7f99',
+    description:
+      'Damaging winds, hail, lightning, ice storms, and heavy winter weather strike the Plains, the Ohio and Mississippi valleys, and the Northeast.',
+    fallbackStates: {
+      Oklahoma: 60,
+      'New Hampshire': 45,
+      Nebraska: 45,
+      Vermont: 45,
+      Kentucky: 45,
+      Missouri: 45,
+      Kansas: 35,
+      Massachusetts: 35,
+      Tennessee: 35,
+      Arkansas: 35,
+      'Rhode Island': 35,
+      Iowa: 35,
+      Connecticut: 35,
+      Maine: 35,
+      'New Jersey': 35,
+      'North Dakota': 35,
+      Washington: 35,
+      'West Virginia': 35,
     },
   },
 };
 
-const HAZARDS: HazardType[] = ['Wildfire', 'Earthquake', 'Flood', 'Hurricane', 'Tornado'];
+const HAZARDS: HazardType[] = ['Wildfire', 'Earthquake', 'Flood', 'Severe Storm', 'Hurricane', 'Tornado'];
 
 // Albers USA composite projection (lon/lat to SVG x, y)
 function projectPoint([lon, lat]: [number, number], stateName: string): [number, number] {
@@ -280,7 +309,6 @@ export default function HazardMapShowcase() {
   }, [isPaused, activeHazard]);
 
   const current = HAZARD_CONFIG[activeHazard];
-  const defaultBaseColor = isDark ? '#f9efcf' : '#efe5cf';
   const strokeColor = isDark ? '#1d1914' : '#ffffff';
 
   return (
@@ -299,17 +327,27 @@ export default function HazardMapShowcase() {
             <svg viewBox="70 15 720 525" className="w-full h-auto select-none">
               {features.map((feature, idx) => {
                 const name = feature.properties?.name || '';
-                const value = snapshot[activeHazard]?.values[String(feature.id)];
-                const fill = value
-                  ? scoreColor(value.value)
-                  : current.fallbackStates[name] || defaultBaseColor;
+                const layer = snapshot[activeHazard];
+                const value = layer?.values[String(feature.id)];
+                // Same colours as the risk map: its score bands, and its grey for
+                // a state with no score. Without the snapshot (backend down), the
+                // regional fallback scores are coloured on the same bands.
+                const fill = layer
+                  ? value
+                    ? scoreColor(value.value)
+                    : NO_DATA_COLOR
+                  : scoreColor(current.fallbackStates[name] ?? 0);
                 const pathData = geoJsonToPath(feature.geometry, name);
 
                 return (
+                  <g key={feature.id || name || idx}>
+                  {/* Light base, like the risk map's basemap, so the 70% fill
+                      looks the same as there in both themes */}
+                  <path d={pathData} fill={MAP_BASE_COLOR} stroke="none" />
                   <path
-                    key={feature.id || name || idx}
                     d={pathData}
                     fill={fill}
+                    fillOpacity={MAP_FILL_OPACITY}
                     stroke={strokeColor}
                     strokeWidth="1.2"
                     strokeLinejoin="round"
@@ -317,6 +355,7 @@ export default function HazardMapShowcase() {
                   >
                     <title>{name}</title>
                   </path>
+                  </g>
                 );
               })}
             </svg>

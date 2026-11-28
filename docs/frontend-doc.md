@@ -79,7 +79,7 @@ frontend/
     home/
       HomeSearch.tsx         Address, city or ZIP search; sends to /map
       HeroScoreCard.tsx      Live score card for saved locations; users can add and remove them
-      HazardMapShowcase.tsx  SVG state map that cycles through 5 hazards, from GET /home-snapshot
+      HazardMapShowcase.tsx  SVG state map that cycles through all 6 hazards, from GET /home-snapshot, in the risk map's colours
       FeaturesGrid.tsx       Static links into /map and /about
     about/
       ScoreExplainer.tsx     Sliders for history, live and wildfire model; shows the 40/40/20 formula. Client-side only
@@ -193,6 +193,8 @@ All in [`lib/riskColors.ts`](../frontend/lib/riskColors.ts):
 
 Quintile bands skip repeated cut points, so a measure where most areas are $0 (for example, hurricane loss) can show fewer than five bands.
 
+**The home showcase matches the risk map.** It colours states with `scoreColor` (the same `SCORE_BANDS`), uses `NO_DATA_COLOR` for a state with no score, and draws fills at `MAP_FILL_OPACITY` (the map's 0.7 for states) over `MAP_BASE_COLOR`, a near-white base standing in for the map's light basemap, so a score looks the same on both pages in either theme. Its scores are the same state hazard scores the map shows with that hazard selected, saved on one day.
+
 Hazard accent colours (`HAZARD_COLORS`) are keyed by the backend's hazard labels, such as `"Severe Storm"`.
 
 ### Expected loss wording
@@ -286,7 +288,7 @@ export interface MapValue {
 
 // GET /api/home-snapshot: fixed state scores for the home page animation
 export interface SnapshotLayer {
-  kind: 'week' | 'day'; // 'week': a weekly wildfire model file; 'day': scores saved on one day
+  kind: 'week' | 'day'; // Always 'day' now (scores saved on one day); 'week' is no longer produced
   asOf: string;         // YYYY-MM-DD
   values: MapValue[];   // One per state code
 }
@@ -371,7 +373,7 @@ Other things to know:
 | Address can't be matched to a county | "Could not match that address to a US county." (map) or "...that location..." (score card) |
 | Photon, FCC or Nominatim down | Address suggestions don't appear; picking one shows "Address lookup failed. Try again." The home search falls back to `/map?q=` |
 | Backend down, home score card | "Backend unavailable" |
-| Backend down, home showcase | Hand-picked regional colours per hazard (`fallbackStates` in `HazardMapShowcase.tsx`) instead of real scores |
+| Backend down, home showcase | Rough regional scores per hazard (`fallbackStates` in `HazardMapShowcase.tsx`), coloured on the map's score bands, instead of real scores |
 | County without NRI data | Loss panel explains why; Connecticut gets a specific message about planning regions |
 | GeoJSON fails to load | Only logged to the console. The loading overlay stays up |
 | One upstream source down | Handled by the backend: scores still load, with "(live data unavailable)" in the affected warnings |
@@ -382,7 +384,7 @@ There's no retry button anywhere: reload the page.
 
 - **Lint fails** with 15 errors and 4 warnings (section 2). `next build` doesn't run lint, so deploys aren't blocked. The `set-state-in-effect` errors are in effects that reset UI state (closing dropdowns, restoring `localStorage`, reading the URL); the `any`s are in Photon response parsing. Unused imports: `SCORE_WEIGHTS` in `HeroScoreCard` and `WildfireModelSection`, `EXPECTED_LOSS_NOTE` and `NRI_LINK` in `ExpectedLossSection`.
 - **Dark mode is partial.** The map page's controls, legend, side panels and loss panel have no `dark:` styles, so they stay light in dark mode.
-- **The home showcase's fallback colours are hard-coded.** When the backend is down it shows fixed regional colours with no "unavailable" label. It also shows 5 hazards, leaving out Severe Storm.
+- **The home showcase's fallback is made up.** When the backend is down it shows rough regional scores from `fallbackStates`, with no "unavailable" label. The showcase also has no legend.
 - **DC and Puerto Rico** have no state polygons, so they're only reachable through the county view or search. The API does return them at state level.
 - **Addresses don't get a pin.** Picking an address zooms to its county but doesn't mark the address itself.
 - **Map search can't tell a backend outage from no results.**
