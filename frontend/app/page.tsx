@@ -16,9 +16,6 @@ export default function HomePage() {
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center mb-24">
           {/* Left column */}
           <div className="lg:col-span-7">
-            <span className="text-xs font-mono uppercase tracking-[0.2em] text-amber-700 dark:text-[#e29b4d] block mb-4 font-semibold">
-              FEMA · USGS · NWS DATA · US COUNTIES
-            </span>
 
             <h1 className="font-display text-5xl sm:text-7xl font-extrabold text-gray-950 dark:text-white tracking-[-0.03em] leading-[1.05]">
               Know the <br />
