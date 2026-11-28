@@ -209,7 +209,7 @@ export default function AboutDataPage() {
         {/* Scoring Architecture Schematic */}
         <section className="max-w-5xl mx-auto px-6 py-10 border-t border-gray-200/80 dark:border-white/10">
           <div className="mb-8">
-            <h2 className="text-xl font-medium text-gray-900 dark:text-white">How The Score Is Built</h2>
+            <h2 className="text-xl font-medium text-gray-900 dark:text-white">How The Score is Calculated</h2>
           </div>
 
           <div className="space-y-4">
@@ -225,8 +225,7 @@ export default function AboutDataPage() {
                     50 / 50
                   </div>
                   <p className="text-xs text-gray-600 dark:text-gray-400 mt-2.5 leading-relaxed">
-                    Historical record + live conditions, scored for each of the 6 hazards
-                  </p>
+                    Historical record + live conditions, scored for each of the 6 hazards                  </p>
                 </div>
               </div>
 
